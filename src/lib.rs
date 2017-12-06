@@ -1,46 +1,43 @@
+extern crate bigint;
 extern crate core;
 extern crate num;
 
-use num::BigUint;
+use core::clone::Clone;
+use core::ops::*;
 use std::fmt;
 use std::cell::RefCell;
 use std::borrow::BorrowMut;
-use core::clone::Clone;
-// use core::u32::wrapping_sub;
-// use core::ops::BitOr;
-// use core::ops::BitAnd;
-// use core::ops::BitXor;
-// use core::ops::Not;
-// use core::ops::Add;
-use core::ops::*;
+use bigint::uint::{U128,U256};
+use fmt::Debug;
+use num::BigUint;
 
 const homestead: u32 = 1150000;
 
-type w128 = (u64, u64);
-type w160 = (u64, u64, u32);
-type w256 = (u64, u64, u64, u64);
+type w128 = U128;
+type w160 = (U128, u32);
+type w256 = U256;
 
 type Instruction = u16;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 struct k256(w256);
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 struct address(w160);
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 enum VMResult {
     vmFailure,
     vmSuccess,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 struct FrameState {
     // contract
     //     codeContract
     //     code
     //     pc
-    stack: RefCell<Vec<u32>>,
+    stack: RefCell<Vec<w256>>,
     //     memory
     //     memorySize
     //     calldata
@@ -48,7 +45,7 @@ struct FrameState {
     //     caller
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 struct AccountState {
     nonce: u32,
     balance: u32,
@@ -56,7 +53,7 @@ struct AccountState {
     codeHash: k256,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 struct TransactionCommon {
     nonce: u64,
     gasPrice: BigUint,
@@ -68,7 +65,7 @@ struct TransactionCommon {
     s: BigUint,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 enum Transaction {
     creationTransaction { common: TransactionCommon, init: Option<Vec<u8>> },
     callTransaction { common: TransactionCommon, data: Vec<u8> },
@@ -82,17 +79,17 @@ impl PartialEq for Bloom {
     }
 }
 
-impl fmt::Debug for Bloom {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Bloom")
-    }
-}
+// impl Debug for Bloom {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "Bloom")
+//     }
+// }
 
 impl Clone for Bloom {
     fn clone(&self) -> Bloom { Bloom(self.0) }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 struct Block {
     parentHash: k256,
     ommersHash: k256,
@@ -111,7 +108,7 @@ struct Block {
     nonce: u64,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 struct Log {
     address: address,
     topics: Vec<k256>,
@@ -124,7 +121,7 @@ struct Log {
     removed: bool,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 struct TransactionReceipt {
     // state:
     gasUsed: u32,
@@ -132,13 +129,13 @@ struct TransactionReceipt {
     bloom: Bloom,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 struct Contract {
     // callerAddress: address,
     // caller
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 struct VM {
     result: RefCell<Option<VMResult>>,
     state:  RefCell<FrameState>,
@@ -226,42 +223,48 @@ impl VM {
 
             MUL => binary_op(&self.state.borrow_mut().stack, Mul::mul),
 
-            // TODO: all this arithmetic should be mod 256. also use wrapping for other ops.
-            SUB => binary_op(&self.state.borrow_mut().stack, u32::wrapping_sub ),
+            SUB => {
+                let stt = self.state.borrow_mut();
+                let mut stk = stt.stack.borrow_mut();
+                let result = U256::overflowing_sub(stk[0], stk[1]).0;
+                stk.pop();
+                stk.pop();
+                stk.push(result);
+            }
 
             DIV => {
                 let stt = self.state.borrow_mut();
-                binary_op(&stt.stack, |x: u32, y: u32| { x / y });
+                binary_op(&stt.stack, |x: U256, y: U256| { x / y });
             }
 
             LT => binary_op(
                 &self.state.borrow_mut().stack,
-                |x: u32, y: u32| { if x < y { 1 } else { 0 } }
+                |x: U256, y: U256| { if x < y { U256::one() } else { U256::zero() } }
             ),
 
             GT => binary_op(
                 &self.state.borrow_mut().stack,
-                |x: u32, y: u32| { if x > y { 1 } else { 0 } }
+                |x: U256, y: U256| { if x > y { U256::one() } else { U256::zero() } }
             ),
 
-//             SLT => binary_op(
-//                 &self.state.borrow_mut().stack,
-//                 |x: u32, y: u32| { if x < y { 1 } else { 0 } }
-//             ),
+            SLT => binary_op(
+                &self.state.borrow_mut().stack,
+                |x: U256, y: U256| { if x < y { U256::one() } else { U256::zero() } }
+            ),
 
-//             SGT => binary_op(
-//                 &self.state.borrow_mut().stack,
-//                 |x: u32, y: u32| { if x < y { 1 } else { 0 } }
-//             ),
+            SGT => binary_op(
+                &self.state.borrow_mut().stack,
+                |x: U256, y: U256| { if x < y { U256::one() } else { U256::zero() } }
+            ),
 
             EQ => binary_op(
                 &self.state.borrow_mut().stack,
-                |x: u32, y: u32| { if x == y { 1 } else { 0 } }
+                |x: U256, y: U256| { if x == y { U256::one() } else { U256::zero() } }
             ),
 
             ISZERO => unary_op(
                 &self.state.borrow_mut().stack,
-                |x: u32| { if x == 0 { 1 } else { 0 } }
+                |x: U256| { if x.is_zero() { U256::one() } else { U256::zero() } }
             ),
 
             AND => binary_op(&self.state.borrow_mut().stack, BitAnd::bitand),
@@ -311,8 +314,8 @@ impl VM {
     }
 }
 
-fn binary_op<F>(stk_cell: &RefCell<Vec<u32>>, op: F)
-where F: Fn(u32, u32) -> u32,
+fn binary_op<F>(stk_cell: &RefCell<Vec<w256>>, op: F)
+where F: Fn(w256, w256) -> w256,
 {
     let mut stk = stk_cell.borrow_mut();
     let result = op(stk[0], stk[1]);
@@ -321,8 +324,8 @@ where F: Fn(u32, u32) -> u32,
     stk.push(result);
 }
 
-fn unary_op<F>(stk_cell: &RefCell<Vec<u32>>, op: F)
-where F: Fn(u32) -> u32,
+fn unary_op<F>(stk_cell: &RefCell<Vec<w256>>, op: F)
+where F: Fn(w256) -> w256,
 {
     let mut stk = stk_cell.borrow_mut();
     let result = op(stk[0]);
@@ -340,7 +343,7 @@ mod tests {
         let init_vm = VM {
             result: RefCell::new(None),
             state: RefCell::new(FrameState {
-                stack: RefCell::new(vec![1,2]),
+                stack: RefCell::new(vec![U256::from(1), U256::from(2)]),
             }),
         };
 
@@ -348,36 +351,39 @@ mod tests {
         vm.step(ADD);
         let state = vm.state.borrow();
         let stack_result = state.stack.borrow()[0];
-        assert_eq!(stack_result, 3);
+        assert_eq!(stack_result.as_u32(), 3);
 
         let mut vm = init_vm.clone();
         vm.step(MUL);
         let state = vm.state.borrow();
         let stack_result = state.stack.borrow()[0];
-        assert_eq!(stack_result, 2);
+        assert_eq!(stack_result.as_u32(), 2);
 
         let mut vm = init_vm.clone();
         vm.step(SUB);
         let state = vm.state.borrow();
         let stack_result = state.stack.borrow()[0];
-        assert_eq!(stack_result, u32::wrapping_sub(1, 2));
+        assert_eq!(
+            stack_result.low_u64(),
+            U256::overflowing_sub(U256::one(), U256::from(2)).0.low_u64()
+        );
 
 //         let mut vm = init_vm.clone();
 //         vm.step(DIV);
 //         let state = vm.state.borrow();
 //         let stack_result = state.stack.borrow()[0];
-//         assert_eq!(stack_result, 2);
+//         assert_eq!(stack_result.as_u32(), 2);
 
         let mut vm = init_vm.clone();
         vm.step(GT);
         let state = vm.state.borrow();
         let stack_result = state.stack.borrow()[0];
-        assert_eq!(stack_result, 0);
+        assert_eq!(stack_result.as_u32(), 0);
 
         let mut vm = init_vm.clone();
         vm.step(LT);
         let state = vm.state.borrow();
         let stack_result = state.stack.borrow()[0];
-        assert_eq!(stack_result, 1);
+        assert_eq!(stack_result.as_u32(), 1);
     }
 }
