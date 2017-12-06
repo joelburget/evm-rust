@@ -295,5 +295,17 @@ mod tests {
 //         let state = vm.state.borrow();
 //         let stack_result = state.stack.borrow()[0];
 //         assert_eq!(stack_result, 2);
+
+        let mut vm = init_vm.clone();
+        vm.step(GT);
+        let state = vm.state.borrow();
+        let stack_result = state.stack.borrow()[0];
+        assert_eq!(stack_result, 0);
+
+        let mut vm = init_vm.clone();
+        vm.step(LT);
+        let state = vm.state.borrow();
+        let stack_result = state.stack.borrow()[0];
+        assert_eq!(stack_result, 1);
     }
 }
