@@ -176,7 +176,7 @@ impl VM {
             SUB => {
                 let stt = self.state.borrow_mut();
                 // TODO: all this arithmetic should be mod 256. also use wrapping for other ops.
-                binary_op(&stt.stack, |x: u32, y: u32| { u32::wrapping_sub(x, y) });
+                binary_op(&stt.stack, u32::wrapping_sub );
             }
 
             DIV => {
