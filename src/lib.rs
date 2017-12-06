@@ -7,6 +7,12 @@ use std::cell::RefCell;
 use std::borrow::BorrowMut;
 use core::clone::Clone;
 // use core::u32::wrapping_sub;
+// use core::ops::BitOr;
+// use core::ops::BitAnd;
+// use core::ops::BitXor;
+// use core::ops::Not;
+// use core::ops::Add;
+use core::ops::*;
 
 const homestead: u32 = 1150000;
 
@@ -158,26 +164,70 @@ const OR: u16 = 0x17;
 const XOR: u16 = 0x18;
 const NOT: u16 = 0x19;
 
+const DUP1: u16 = 0x80;
+const DUP2: u16 = 0x81;
+const DUP3: u16 = 0x82;
+const DUP4: u16 = 0x83;
+const DUP5: u16 = 0x84;
+const DUP6: u16 = 0x85;
+const DUP7: u16 = 0x86;
+const DUP8: u16 = 0x87;
+const DUP9: u16 = 0x88;
+const DUP10: u16 = 0x89;
+const DUP11: u16 = 0x8a;
+const DUP12: u16 = 0x8b;
+const DUP13: u16 = 0x8c;
+const DUP14: u16 = 0x8d;
+const DUP15: u16 = 0x8e;
+const DUP16: u16 = 0x8f;
+
+const SWAP1: u16 = 0x90;
+const SWAP2: u16 = 0x91;
+const SWAP3: u16 = 0x92;
+const SWAP4: u16 = 0x93;
+const SWAP5: u16 = 0x94;
+const SWAP6: u16 = 0x95;
+const SWAP7: u16 = 0x96;
+const SWAP8: u16 = 0x97;
+const SWAP9: u16 = 0x98;
+const SWAP10: u16 = 0x99;
+const SWAP11: u16 = 0x9a;
+const SWAP12: u16 = 0x9b;
+const SWAP13: u16 = 0x9c;
+const SWAP14: u16 = 0x9d;
+const SWAP15: u16 = 0x9e;
+const SWAP16: u16 = 0x9f;
+
+macro_rules! dup {
+    ($self: expr, $n: expr) => {{
+        let stt = &$self.state.borrow_mut();
+        let mut stk = stt.stack.borrow_mut();
+        let val = stk[$n];
+        stk.push(val);
+    }}
+}
+
+macro_rules! swap {
+    ($self: expr, $n: expr) => {{
+        let stt = &$self.state.borrow_mut();
+        let mut stk = stt.stack.borrow_mut();
+        let tmp = stk[$n];
+        stk[$n] = stk[0];
+        stk[0] = tmp;
+    }}
+}
+
 impl VM {
     fn step(&mut self, op: Instruction) {
         match op {
             STOP => println!("halt!"),
 
-            ADD => {
-                let stt = self.state.borrow_mut();
-                binary_op(&stt.stack, |x: u32, y: u32| { x + y });
-            }
+            ADD => binary_op(&self.state.borrow_mut().stack, Add::add),
 
-            MUL => {
-                let stt = self.state.borrow_mut();
-                binary_op(&stt.stack, |x: u32, y: u32| { x * y });
-            }
+            MUL => binary_op(&self.state.borrow_mut().stack, Mul::mul),
 
-            SUB => {
-                let stt = self.state.borrow_mut();
-                // TODO: all this arithmetic should be mod 256. also use wrapping for other ops.
-                binary_op(&stt.stack, u32::wrapping_sub );
-            }
+            // TODO: all this arithmetic should be mod 256. also use wrapping for other ops.
+            SUB => binary_op(&self.state.borrow_mut().stack, u32::wrapping_sub ),
 
             DIV => {
                 let stt = self.state.borrow_mut();
@@ -214,25 +264,47 @@ impl VM {
                 |x: u32| { if x == 0 { 1 } else { 0 } }
             ),
 
-            AND => binary_op(
-                &self.state.borrow_mut().stack,
-                |x: u32, y: u32| { x & y }
-            ),
+            AND => binary_op(&self.state.borrow_mut().stack, BitAnd::bitand),
 
-            OR => binary_op(
-                &self.state.borrow_mut().stack,
-                |x: u32, y: u32| { x | y }
-            ),
+            OR  => binary_op(&self.state.borrow_mut().stack, BitOr::bitor),
 
-            XOR => binary_op(
-                &self.state.borrow_mut().stack,
-                |x: u32, y: u32| { x ^ y }
-            ),
+            XOR => binary_op(&self.state.borrow_mut().stack, BitXor::bitxor),
 
-            NOT => unary_op(
-                &self.state.borrow_mut().stack,
-                |x: u32| { !x }
-            ),
+            NOT => unary_op(&self.state.borrow_mut().stack, Not::not),
+
+            DUP1  => dup!(self, 1),
+            DUP2  => dup!(self, 2),
+            DUP3  => dup!(self, 3),
+            DUP4  => dup!(self, 4),
+            DUP5  => dup!(self, 5),
+            DUP6  => dup!(self, 6),
+            DUP7  => dup!(self, 7),
+            DUP8  => dup!(self, 8),
+            DUP9  => dup!(self, 9),
+            DUP10 => dup!(self, 10),
+            DUP11 => dup!(self, 11),
+            DUP12 => dup!(self, 12),
+            DUP13 => dup!(self, 13),
+            DUP14 => dup!(self, 14),
+            DUP15 => dup!(self, 15),
+            DUP16 => dup!(self, 16),
+
+            SWAP1  => swap!(self, 1),
+            SWAP2  => swap!(self, 2),
+            SWAP3  => swap!(self, 3),
+            SWAP4  => swap!(self, 4),
+            SWAP5  => swap!(self, 5),
+            SWAP6  => swap!(self, 6),
+            SWAP7  => swap!(self, 7),
+            SWAP8  => swap!(self, 8),
+            SWAP9  => swap!(self, 9),
+            SWAP10 => swap!(self, 10),
+            SWAP11 => swap!(self, 11),
+            SWAP12 => swap!(self, 12),
+            SWAP13 => swap!(self, 13),
+            SWAP14 => swap!(self, 14),
+            SWAP15 => swap!(self, 15),
+            SWAP16 => swap!(self, 16),
 
             _    => println!("there"),
         }
