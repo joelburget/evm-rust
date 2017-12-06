@@ -1,0 +1,7 @@
+[package]
+name = "evm"
+version = "0.1.0"
+authors = ["Joel Burget <joelburget@gmail.com>"]
+
+[dependencies]
+num = "0.1"
