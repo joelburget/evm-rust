@@ -8,7 +8,6 @@ use std::fmt;
 use std::cell::RefCell;
 use std::borrow::BorrowMut;
 use bigint::uint::{U128,U256};
-use fmt::Debug;
 use num::BigUint;
 
 const homestead: u32 = 1150000;
@@ -214,6 +213,10 @@ macro_rules! swap {
     }}
 }
 
+fn bool_to_u256(b: bool) -> U256 {
+    if b { U256::one() } else { U256::zero() }
+}
+
 impl VM {
     fn step(&mut self, op: Instruction) {
         match op {
@@ -234,37 +237,37 @@ impl VM {
 
             DIV => {
                 let stt = self.state.borrow_mut();
-                binary_op(&stt.stack, |x: U256, y: U256| { x / y });
+                binary_op(&stt.stack, |x, y| { x / y });
             }
 
             LT => binary_op(
                 &self.state.borrow_mut().stack,
-                |x: U256, y: U256| { if x < y { U256::one() } else { U256::zero() } }
+                |x, y| bool_to_u256(x < y)
             ),
 
             GT => binary_op(
                 &self.state.borrow_mut().stack,
-                |x: U256, y: U256| { if x > y { U256::one() } else { U256::zero() } }
+                |x, y| bool_to_u256(x > y)
             ),
 
             SLT => binary_op(
                 &self.state.borrow_mut().stack,
-                |x: U256, y: U256| { if x < y { U256::one() } else { U256::zero() } }
+                |x, y| bool_to_u256(x < y)
             ),
 
             SGT => binary_op(
                 &self.state.borrow_mut().stack,
-                |x: U256, y: U256| { if x < y { U256::one() } else { U256::zero() } }
+                |x, y| bool_to_u256(x < y)
             ),
 
             EQ => binary_op(
                 &self.state.borrow_mut().stack,
-                |x: U256, y: U256| { if x == y { U256::one() } else { U256::zero() } }
+                |x, y| bool_to_u256(x == y)
             ),
 
             ISZERO => unary_op(
                 &self.state.borrow_mut().stack,
-                |x: U256| { if x.is_zero() { U256::one() } else { U256::zero() } }
+                |x| bool_to_u256(x.is_zero())
             ),
 
             AND => binary_op(&self.state.borrow_mut().stack, BitAnd::bitand),
