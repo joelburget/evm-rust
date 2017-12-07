@@ -6,3 +6,4 @@ authors = ["Joel Burget <joelburget@gmail.com>"]
 [dependencies]
 num = "0.1"
 bigint = "4.2.0"
+sha3 = "0.7.2"

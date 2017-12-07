@@ -1,14 +1,14 @@
 extern crate bigint;
 extern crate core;
 extern crate num;
+extern crate sha3;
 
 use core::clone::Clone;
 use core::ops::*;
-use std::fmt;
-use std::cell::RefCell;
-use std::borrow::BorrowMut;
+use std::cmp::max;
 use bigint::uint::{U128,U256};
 use num::BigUint;
+use sha3::{Digest, Keccak256};
 
 const homestead: u32 = 1150000;
 
@@ -34,9 +34,11 @@ enum VMResult {
 struct FrameState {
     // contract
     //     codeContract
-    //     code
-    //     pc
-    stack: RefCell<Vec<w256>>,
+    gas_available: U256,
+    pc:            U256,
+    memory:        Vec<u8>,
+    active_words:  U256,
+    stack:         Vec<w256>,
     //     memory
     //     memorySize
     //     calldata
@@ -136,8 +138,8 @@ struct Contract {
 
 #[derive(PartialEq, Clone)]
 struct VM {
-    result: RefCell<Option<VMResult>>,
-    state:  RefCell<FrameState>,
+    result: Option<VMResult>,
+    state:  FrameState,
     // frames: Array<Frame>,
     // env: Env,
     // block
@@ -159,6 +161,8 @@ const AND: u16    = 0x16;
 const OR: u16     = 0x17;
 const XOR: u16    = 0x18;
 const NOT: u16    = 0x19;
+const BYTE: u16    = 0x1a;
+const SHA3: u16    = 0x20;
 
 const DUP1: u16  = 0x80;
 const DUP2: u16  = 0x81;
@@ -196,8 +200,7 @@ const SWAP16: u16 = 0x9f;
 
 macro_rules! dup {
     ($self: expr, $n: expr) => {{
-        let stt = &$self.state.borrow_mut();
-        let mut stk = stt.stack.borrow_mut();
+        let stk = &mut $self.state.stack;
         let val = stk[$n];
         stk.push(val);
     }}
@@ -205,8 +208,7 @@ macro_rules! dup {
 
 macro_rules! swap {
     ($self: expr, $n: expr) => {{
-        let stt = &$self.state.borrow_mut();
-        let mut stk = stt.stack.borrow_mut();
+        let stk = &mut $self.state.stack;
         let tmp = stk[$n];
         stk[$n] = stk[0];
         stk[0] = tmp;
@@ -217,66 +219,95 @@ fn bool_to_u256(b: bool) -> U256 {
     if b { U256::one() } else { U256::zero() }
 }
 
+// Should these be 256 bit or smaller?
+fn memory_expansion(s: U256, f: U256, l: U256) -> U256 {
+    if l.is_zero() { s } else { max(s, (f + l) / U256::from(32)) }
+}
+
 impl VM {
     fn step(&mut self, op: Instruction) {
         match op {
             STOP => println!("halt!"),
 
-            ADD => binary_op(&self.state.borrow_mut().stack, Add::add),
+            ADD => binary_op(&mut self.state.stack, Add::add),
 
-            MUL => binary_op(&self.state.borrow_mut().stack, Mul::mul),
+            MUL => binary_op(&mut self.state.stack, Mul::mul),
 
             SUB => {
-                let stt = self.state.borrow_mut();
-                let mut stk = stt.stack.borrow_mut();
+                let stk = &mut self.state.stack;
                 let result = U256::overflowing_sub(stk[0], stk[1]).0;
                 stk.pop();
                 stk.pop();
                 stk.push(result);
             }
 
-            DIV => {
-                let stt = self.state.borrow_mut();
-                binary_op(&stt.stack, |x, y| { x / y });
-            }
+            DIV => binary_op(&mut self.state.stack, |x, y| { x / y }),
 
             LT => binary_op(
-                &self.state.borrow_mut().stack,
+                &mut self.state.stack,
                 |x, y| bool_to_u256(x < y)
             ),
 
             GT => binary_op(
-                &self.state.borrow_mut().stack,
+                &mut self.state.stack,
                 |x, y| bool_to_u256(x > y)
             ),
 
+            // XXX make signed
             SLT => binary_op(
-                &self.state.borrow_mut().stack,
+                &mut self.state.stack,
                 |x, y| bool_to_u256(x < y)
             ),
 
+            // XXX make signed
             SGT => binary_op(
-                &self.state.borrow_mut().stack,
+                &mut self.state.stack,
                 |x, y| bool_to_u256(x < y)
             ),
 
             EQ => binary_op(
-                &self.state.borrow_mut().stack,
+                &mut self.state.stack,
                 |x, y| bool_to_u256(x == y)
             ),
 
             ISZERO => unary_op(
-                &self.state.borrow_mut().stack,
+                &mut self.state.stack,
                 |x| bool_to_u256(x.is_zero())
             ),
 
-            AND => binary_op(&self.state.borrow_mut().stack, BitAnd::bitand),
+            AND => binary_op(&mut self.state.stack, BitAnd::bitand),
 
-            OR  => binary_op(&self.state.borrow_mut().stack, BitOr::bitor),
+            OR  => binary_op(&mut self.state.stack, BitOr::bitor),
 
-            XOR => binary_op(&self.state.borrow_mut().stack, BitXor::bitxor),
+            XOR => binary_op(&mut self.state.stack, BitXor::bitxor),
 
-            NOT => unary_op(&self.state.borrow_mut().stack, Not::not),
+            NOT => unary_op(&mut self.state.stack, Not::not),
+
+//             BYTE => {
+//                 let stt = self.state.borrow_mut();
+//                 let mut stk = stt.stack.borrow_mut();
+//                 let ix = stk[0].to_usize();
+//                 let source = stk[1];
+//                 stk.pop();
+//                 stk.pop();
+//                 stk.push(source.byte(ix));
+//             }
+
+//             SHA3 => {
+//                 let mut hasher = Keccak256::default();
+//                 let     stt = self.state.borrow_mut();
+//                 let mut stk = stt.stack.borrow_mut();
+//                 let start = stk[0];
+//                 let end   = stk[1];
+//                 let message = self.get_memory(start, end);
+//                 hasher.input(message);
+//                 let out = hasher.result();
+
+//                 stk.pop();
+//                 stk.pop();
+//                 stk.push(out);
+//                 stt.active_words = memory_expansion(stt.active_words, start, end);
+//             }
 
             DUP1  => dup!(self, 1),
             DUP2  => dup!(self, 2),
@@ -317,55 +348,53 @@ impl VM {
     }
 }
 
-fn binary_op<F>(stk_cell: &RefCell<Vec<w256>>, op: F)
+fn binary_op<F>(stk: &mut Vec<w256>, op: F)
 where F: Fn(w256, w256) -> w256,
 {
-    let mut stk = stk_cell.borrow_mut();
     let result = op(stk[0], stk[1]);
     stk.pop();
     stk.pop();
     stk.push(result);
 }
 
-fn unary_op<F>(stk_cell: &RefCell<Vec<w256>>, op: F)
+fn unary_op<F>(stk: &mut Vec<w256>, op: F)
 where F: Fn(w256) -> w256,
 {
-    let mut stk = stk_cell.borrow_mut();
     let result = op(stk[0]);
     stk[0] = result;
 }
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::borrow::Borrow;
     use *;
 
     #[test]
     fn it_works() {
+        let g = U256::from(30000);
         let init_vm = VM {
-            result: RefCell::new(None),
-            state: RefCell::new(FrameState {
-                stack: RefCell::new(vec![U256::from(1), U256::from(2)]),
-            }),
+            result: None,
+            state: FrameState {
+                gas_available: g,
+                pc:            U256::zero(),
+                memory:        Vec::new(),
+                active_words:  U256::zero(),
+                stack:         vec![U256::from(1), U256::from(2)],
+            },
         };
 
         let mut vm = init_vm.clone();
         vm.step(ADD);
-        let state = vm.state.borrow();
-        let stack_result = state.stack.borrow()[0];
+        let stack_result = vm.state.stack[0];
         assert_eq!(stack_result.as_u32(), 3);
 
         let mut vm = init_vm.clone();
         vm.step(MUL);
-        let state = vm.state.borrow();
-        let stack_result = state.stack.borrow()[0];
+        let stack_result = vm.state.stack[0];
         assert_eq!(stack_result.as_u32(), 2);
 
         let mut vm = init_vm.clone();
         vm.step(SUB);
-        let state = vm.state.borrow();
-        let stack_result = state.stack.borrow()[0];
+        let stack_result = vm.state.stack[0];
         assert_eq!(
             stack_result.low_u64(),
             U256::overflowing_sub(U256::one(), U256::from(2)).0.low_u64()
@@ -379,14 +408,12 @@ mod tests {
 
         let mut vm = init_vm.clone();
         vm.step(GT);
-        let state = vm.state.borrow();
-        let stack_result = state.stack.borrow()[0];
+        let stack_result = vm.state.stack[0];
         assert_eq!(stack_result.as_u32(), 0);
 
         let mut vm = init_vm.clone();
         vm.step(LT);
-        let state = vm.state.borrow();
-        let stack_result = state.stack.borrow()[0];
+        let stack_result = vm.state.stack[0];
         assert_eq!(stack_result.as_u32(), 1);
     }
 }
