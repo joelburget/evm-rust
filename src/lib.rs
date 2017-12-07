@@ -12,33 +12,31 @@ use sha3::{Digest, Keccak256};
 
 const homestead: u32 = 1150000;
 
-type w128 = U128;
-type w160 = (U128, u32);
-type w256 = U256;
+type U160 = (U128, u32);
 
 type Instruction = u16;
 
 #[derive(PartialEq, Clone)]
-struct k256(w256);
+pub struct K256(U256);
 
 #[derive(PartialEq, Clone)]
-struct address(w160);
+pub struct Address(U160);
 
 #[derive(PartialEq, Clone)]
-enum VMResult {
-    vmFailure,
-    vmSuccess,
+pub enum VMResult {
+    VmFailure,
+    VmSuccess,
 }
 
 #[derive(PartialEq, Clone)]
-struct FrameState {
+pub struct FrameState {
     // contract
     //     codeContract
     gas_available: U256,
     pc:            U256,
     memory:        Vec<u8>,
     active_words:  U256,
-    stack:         Vec<w256>,
+    stack:         Vec<U256>,
     //     memory
     //     memorySize
     //     calldata
@@ -47,19 +45,19 @@ struct FrameState {
 }
 
 #[derive(PartialEq, Clone)]
-struct AccountState {
+pub struct AccountState {
     nonce: u32,
     balance: u32,
-    storageRoot: k256,
-    codeHash: k256,
+    storage_root: K256,
+    code_hash: K256,
 }
 
 #[derive(PartialEq, Clone)]
-struct TransactionCommon {
+pub struct TransactionCommon {
     nonce: u64,
-    gasPrice: BigUint,
-    gasLimit: BigUint,
-    to: w160,
+    gas_price: BigUint,
+    gas_limit: BigUint,
+    to: U160,
     value: BigUint,
     v: BigUint,
     r: BigUint,
@@ -67,77 +65,72 @@ struct TransactionCommon {
 }
 
 #[derive(PartialEq, Clone)]
-enum Transaction {
-    creationTransaction { common: TransactionCommon, init: Option<Vec<u8>> },
-    callTransaction { common: TransactionCommon, data: Vec<u8> },
+pub enum Transaction {
+    CreationTransaction { common: TransactionCommon, init: Option<Vec<u8>> },
+    CallTransaction { common: TransactionCommon, data: Vec<u8> },
 }
 
 struct Bloom([u8; 256]);
 
 impl PartialEq for Bloom {
-    fn eq(&self, other: &Bloom) -> bool {
-        false
+    fn eq(&self, &Bloom(other): &Bloom) -> bool {
+        // https://stackoverflow.com/a/23149538/383958
+        self.0.iter().zip(other.iter()).all(|(a,b)| a == b)
     }
 }
-
-// impl Debug for Bloom {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "Bloom")
-//     }
-// }
 
 impl Clone for Bloom {
     fn clone(&self) -> Bloom { Bloom(self.0) }
 }
 
 #[derive(PartialEq, Clone)]
-struct Block {
-    parentHash: k256,
-    ommersHash: k256,
-    beneficiary: address,
-    stateRoot: k256,
-    transactionsRoot: k256,
-    receiptsRoot: k256,
-    logsBloom: Bloom,
+pub struct Block {
+    parent_hash: K256,
+    ommers_hash: K256,
+    beneficiary: Address,
+    state_root: K256,
+    transactions_root: K256,
+    receipts_root: K256,
+    logs_bloom: Bloom,
     difficulty: BigUint,
     number: BigUint,
-    gasLimit: BigUint,
-    gasUsed: BigUint,
+    gas_limit: BigUint,
+    gas_used: BigUint,
     timestamp: BigUint,
-    extraData: Vec<u8>,
-    mixHash: k256,
+    extra_data: Vec<u8>,
+    mix_hash: K256,
     nonce: u64,
 }
 
 #[derive(PartialEq, Clone)]
-struct Log {
-    address: address,
-    topics: Vec<k256>,
+pub struct Log {
+    address: Address,
+    topics: Vec<K256>,
     data: Vec<u8>,
-    blockNumber: u64,
-    txHash: k256,
-    txIndex: u32,
-    blockHash: k256,
+    block_number: u64,
+    tx_hash: K256,
+    tx_index: u32,
+    block_hash: K256,
     index: u32,
     removed: bool,
 }
 
 #[derive(PartialEq, Clone)]
-struct TransactionReceipt {
+pub struct TransactionReceipt {
     // state:
-    gasUsed: u32,
+    gas_used: u32,
     logs: Vec<Log>,
     bloom: Bloom,
 }
 
 #[derive(PartialEq, Clone)]
-struct Contract {
-    // callerAddress: address,
+pub struct Contract {
+    // callerAddress: Address,
     // caller
 }
 
 #[derive(PartialEq, Clone)]
-struct VM {
+pub struct VM {
     result: Option<VMResult>,
     state:  FrameState,
     // frames: Array<Frame>,
@@ -145,58 +138,58 @@ struct VM {
     // block
 }
 
-const STOP: u16 = 0x00;
-const ADD: u16  = 0x01;
-const MUL: u16  = 0x02;
-const SUB: u16  = 0x03;
-const DIV: u16  = 0x04;
+pub const STOP: u16 = 0x00;
+pub const ADD: u16  = 0x01;
+pub const MUL: u16  = 0x02;
+pub const SUB: u16  = 0x03;
+pub const DIV: u16  = 0x04;
 
-const LT: u16     = 0x10;
-const GT: u16     = 0x11;
-const SLT: u16    = 0x12;
-const SGT: u16    = 0x13;
-const EQ: u16     = 0x14;
-const ISZERO: u16 = 0x15;
-const AND: u16    = 0x16;
-const OR: u16     = 0x17;
-const XOR: u16    = 0x18;
-const NOT: u16    = 0x19;
-const BYTE: u16    = 0x1a;
-const SHA3: u16    = 0x20;
+pub const LT: u16     = 0x10;
+pub const GT: u16     = 0x11;
+pub const SLT: u16    = 0x12;
+pub const SGT: u16    = 0x13;
+pub const EQ: u16     = 0x14;
+pub const ISZERO: u16 = 0x15;
+pub const AND: u16    = 0x16;
+pub const OR: u16     = 0x17;
+pub const XOR: u16    = 0x18;
+pub const NOT: u16    = 0x19;
+pub const BYTE: u16    = 0x1a;
+pub const SHA3: u16    = 0x20;
 
-const DUP1: u16  = 0x80;
-const DUP2: u16  = 0x81;
-const DUP3: u16  = 0x82;
-const DUP4: u16  = 0x83;
-const DUP5: u16  = 0x84;
-const DUP6: u16  = 0x85;
-const DUP7: u16  = 0x86;
-const DUP8: u16  = 0x87;
-const DUP9: u16  = 0x88;
-const DUP10: u16 = 0x89;
-const DUP11: u16 = 0x8a;
-const DUP12: u16 = 0x8b;
-const DUP13: u16 = 0x8c;
-const DUP14: u16 = 0x8d;
-const DUP15: u16 = 0x8e;
-const DUP16: u16 = 0x8f;
+pub const DUP1: u16  = 0x80;
+pub const DUP2: u16  = 0x81;
+pub const DUP3: u16  = 0x82;
+pub const DUP4: u16  = 0x83;
+pub const DUP5: u16  = 0x84;
+pub const DUP6: u16  = 0x85;
+pub const DUP7: u16  = 0x86;
+pub const DUP8: u16  = 0x87;
+pub const DUP9: u16  = 0x88;
+pub const DUP10: u16 = 0x89;
+pub const DUP11: u16 = 0x8a;
+pub const DUP12: u16 = 0x8b;
+pub const DUP13: u16 = 0x8c;
+pub const DUP14: u16 = 0x8d;
+pub const DUP15: u16 = 0x8e;
+pub const DUP16: u16 = 0x8f;
 
-const SWAP1: u16  = 0x90;
-const SWAP2: u16  = 0x91;
-const SWAP3: u16  = 0x92;
-const SWAP4: u16  = 0x93;
-const SWAP5: u16  = 0x94;
-const SWAP6: u16  = 0x95;
-const SWAP7: u16  = 0x96;
-const SWAP8: u16  = 0x97;
-const SWAP9: u16  = 0x98;
-const SWAP10: u16 = 0x99;
-const SWAP11: u16 = 0x9a;
-const SWAP12: u16 = 0x9b;
-const SWAP13: u16 = 0x9c;
-const SWAP14: u16 = 0x9d;
-const SWAP15: u16 = 0x9e;
-const SWAP16: u16 = 0x9f;
+pub const SWAP1: u16  = 0x90;
+pub const SWAP2: u16  = 0x91;
+pub const SWAP3: u16  = 0x92;
+pub const SWAP4: u16  = 0x93;
+pub const SWAP5: u16  = 0x94;
+pub const SWAP6: u16  = 0x95;
+pub const SWAP7: u16  = 0x96;
+pub const SWAP8: u16  = 0x97;
+pub const SWAP9: u16  = 0x98;
+pub const SWAP10: u16 = 0x99;
+pub const SWAP11: u16 = 0x9a;
+pub const SWAP12: u16 = 0x9b;
+pub const SWAP13: u16 = 0x9c;
+pub const SWAP14: u16 = 0x9d;
+pub const SWAP15: u16 = 0x9e;
+pub const SWAP16: u16 = 0x9f;
 
 macro_rules! dup {
     ($self: expr, $n: expr) => {{
@@ -225,7 +218,7 @@ fn memory_expansion(s: U256, f: U256, l: U256) -> U256 {
 }
 
 impl VM {
-    fn step(&mut self, op: Instruction) {
+    pub fn step(&mut self, op: Instruction) {
         match op {
             STOP => println!("halt!"),
 
@@ -348,8 +341,8 @@ impl VM {
     }
 }
 
-fn binary_op<F>(stk: &mut Vec<w256>, op: F)
-where F: Fn(w256, w256) -> w256,
+fn binary_op<F>(stk: &mut Vec<U256>, op: F)
+where F: Fn(U256, U256) -> U256,
 {
     let result = op(stk[0], stk[1]);
     stk.pop();
@@ -357,8 +350,8 @@ where F: Fn(w256, w256) -> w256,
     stk.push(result);
 }
 
-fn unary_op<F>(stk: &mut Vec<w256>, op: F)
-where F: Fn(w256) -> w256,
+fn unary_op<F>(stk: &mut Vec<U256>, op: F)
+where F: Fn(U256) -> U256,
 {
     let result = op(stk[0]);
     stk[0] = result;
