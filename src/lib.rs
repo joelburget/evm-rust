@@ -138,12 +138,14 @@ pub struct VM {
     // block
 }
 
+// 0s: stop and arithmetic operations
 pub const STOP: u16 = 0x00;
 pub const ADD: u16  = 0x01;
 pub const MUL: u16  = 0x02;
 pub const SUB: u16  = 0x03;
 pub const DIV: u16  = 0x04;
 
+// 10s: comparison & bitwise logic operations
 pub const LT: u16     = 0x10;
 pub const GT: u16     = 0x11;
 pub const SLT: u16    = 0x12;
@@ -155,13 +157,20 @@ pub const OR: u16     = 0x17;
 pub const XOR: u16    = 0x18;
 pub const NOT: u16    = 0x19;
 pub const BYTE: u16    = 0x1a;
+
+// 20s: sha3
 pub const SHA3: u16    = 0x20;
 
+// 30s: environmental information
+// 40s: block information
+// 50s: stack, memory, storage, and flow operations
 pub const PC: u16 = 0x58;
 pub const MSIZE: u16 = 0x59;
 pub const GAS: u16 = 0x5a;
 pub const JUMPDEST: u16 = 0x5b;
 
+// 60s & 70s: push operations
+// 80s: duplication operations
 pub const DUP1: u16  = 0x80;
 pub const DUP2: u16  = 0x81;
 pub const DUP3: u16  = 0x82;
@@ -179,6 +188,7 @@ pub const DUP14: u16 = 0x8d;
 pub const DUP15: u16 = 0x8e;
 pub const DUP16: u16 = 0x8f;
 
+// 90s: exchange operations
 pub const SWAP1: u16  = 0x90;
 pub const SWAP2: u16  = 0x91;
 pub const SWAP3: u16  = 0x92;
@@ -195,6 +205,8 @@ pub const SWAP13: u16 = 0x9c;
 pub const SWAP14: u16 = 0x9d;
 pub const SWAP15: u16 = 0x9e;
 pub const SWAP16: u16 = 0x9f;
+
+// a0s: logging operations
 
 macro_rules! dup {
     ($self: expr, $n: expr) => {{
