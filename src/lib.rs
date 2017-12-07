@@ -164,6 +164,7 @@ pub const SHA3: u16    = 0x20;
 // 30s: environmental information
 // 40s: block information
 // 50s: stack, memory, storage, and flow operations
+pub const POP: u16 = 0x50;
 pub const PC: u16 = 0x58;
 pub const MSIZE: u16 = 0x59;
 pub const GAS: u16 = 0x5a;
@@ -319,6 +320,11 @@ impl VM {
 //                 stt.active_words = memory_expansion(stt.active_words, start, end);
 //             }
 
+            POP => {
+                self.state.stack.pop();
+                return ();
+            }
+
             PC => self.state.stack.push(self.state.pc),
 
             MSIZE => self.state.stack
@@ -326,7 +332,7 @@ impl VM {
 
             GAS => self.state.stack.push(self.state.gas_available),
 
-            JUMPDEST => {},
+            JUMPDEST => {}
 
             DUP1  => dup!(self, 1),
             DUP2  => dup!(self, 2),
