@@ -157,6 +157,11 @@ pub const NOT: u16    = 0x19;
 pub const BYTE: u16    = 0x1a;
 pub const SHA3: u16    = 0x20;
 
+pub const PC: u16 = 0x58;
+pub const MSIZE: u16 = 0x59;
+pub const GAS: u16 = 0x5a;
+pub const JUMPDEST: u16 = 0x5b;
+
 pub const DUP1: u16  = 0x80;
 pub const DUP2: u16  = 0x81;
 pub const DUP3: u16  = 0x82;
@@ -301,6 +306,15 @@ impl VM {
 //                 stk.push(out);
 //                 stt.active_words = memory_expansion(stt.active_words, start, end);
 //             }
+
+            PC => self.state.stack.push(self.state.pc),
+
+            MSIZE => self.state.stack
+                .push(U256::from(self.state.memory.len() * 32)),
+
+            GAS => self.state.stack.push(self.state.gas_available),
+
+            JUMPDEST => {},
 
             DUP1  => dup!(self, 1),
             DUP2  => dup!(self, 2),
