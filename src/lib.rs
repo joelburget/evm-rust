@@ -6,13 +6,11 @@ extern crate sha3;
 use core::clone::Clone;
 use core::ops::*;
 use std::cmp::max;
-use bigint::uint::{U128,U256};
+use bigint::uint::U256;
 use num::BigUint;
 use sha3::{Digest, Keccak256};
 
 const homestead: u32 = 1150000;
-
-type U160 = (U128, u32);
 
 type Instruction = u16;
 
@@ -20,7 +18,7 @@ type Instruction = u16;
 pub struct K256(U256);
 
 #[derive(PartialEq, Clone)]
-pub struct Address(U160);
+pub struct Address([u8; 20]);
 
 #[derive(PartialEq, Clone)]
 pub enum VMResult {
@@ -57,7 +55,7 @@ pub struct TransactionCommon {
     nonce: u64,
     gas_price: BigUint,
     gas_limit: BigUint,
-    to: U160,
+    to: Address,
     value: BigUint,
     v: BigUint,
     r: BigUint,
@@ -130,11 +128,48 @@ pub struct Contract {
 }
 
 #[derive(PartialEq, Clone)]
+pub struct Header {}
+
+#[derive(PartialEq, Clone)]
+pub struct Env {
+    /// I_a, the address of the account which owns the code that is executing
+    owner: Address,
+
+    /// I_o, the sender address of the transaction that originated this execution
+    origin: Address,
+
+    /// I_p: the price of gas in the transaction that originated this execution
+    gas_price: U256, // XXX also in TransactionCommon
+
+    /// I_d: the byte array that is the input data to this execution; if the execution agent is a
+    /// transaction, this would be the transaction data
+    data: Vec<u8>,
+
+    /// I_s: the address of the account which caused the code to be executing; if the execution
+    /// agent is a transaction this would be the transaction sender
+    caller: Address,
+
+    /// I_v, the value, in Wei, passed to this account as part of the same procedure as execution;
+    /// if the execution agent is a transaction, this would be the transaction value
+    transaction_value: U256,
+
+    /// I_b, the byte array that is the machine code to be executed
+    code: Vec<u8>,
+
+    /// I_H, the block header of the present block
+    header: Header,
+
+    /// I_e: the depth of the present message-call or contract-creation (ie the number of CALLs of
+    /// CREATEs being executed at present)
+    depth: u16,
+}
+
+#[derive(PartialEq, Clone)]
 pub struct VM {
     result: Option<VMResult>,
     state:  FrameState,
     // frames: Array<Frame>,
-    // env: Env,
+    env: Env,
     // block
 }
 
@@ -162,6 +197,8 @@ pub const BYTE: u16    = 0x1a;
 pub const SHA3: u16    = 0x20;
 
 // 30s: environmental information
+pub const ADDRESS: u16 = 0x30;
+
 // 40s: block information
 // 50s: stack, memory, storage, and flow operations
 pub const POP: u16 = 0x50;
@@ -233,6 +270,10 @@ fn bool_to_u256(b: bool) -> U256 {
 // Should these be 256 bit or smaller?
 fn memory_expansion(s: U256, f: U256, l: U256) -> U256 {
     if l.is_zero() { s } else { max(s, (f + l) / U256::from(32)) }
+}
+
+fn addr_to_u256(&Address(bytes): &Address) -> U256 {
+    return U256::from_big_endian(&bytes[0..20]);
 }
 
 impl VM {
@@ -320,6 +361,30 @@ impl VM {
 //                 stt.active_words = memory_expansion(stt.active_words, start, end);
 //             }
 
+            ADDRESS => self.state.stack.push(addr_to_u256(&self.env.owner)),
+
+            // BALANCE
+
+            ORIGIN => self.state.stack.push(addr_to_u256(&self.env.origin)),
+
+            CALLER => self.state.stack.push(addr_to_u256(&self.env.caller)),
+
+            CALLVALUE => self.state.stack.push(self.env.transaction_value),
+
+//             CALLDATALOAD => {
+//                 let ix = &mut self.state.stack[0];
+//                 let data = self.env.data;
+//                 // XXX default to 0 for index out of bounds
+//                 let mut slice = data[ix..ix+32];
+//                 self.state.stack.pop();
+//                 self.state.stack.push(U256::from(slice));
+//             }
+
+            CALLDATASIZE =>
+                self.state.stack.push(U256::from(self.env.data.len())),
+
+            // CALLDATACOPY => {}
+
             POP => {
                 self.state.stack.pop();
                 return ();
@@ -405,6 +470,17 @@ mod tests {
                 active_words:  U256::zero(),
                 stack:         vec![U256::from(1), U256::from(2)],
             },
+            env: Env {
+                owner: Address([0; 20]),
+                origin: Address([0; 20]),
+                gas_price: U256::zero(),
+                data: Vec::new(),
+                caller: Address([0; 20]),
+                transaction_value: U256::zero(),
+                code: Vec::new(),
+                header: Header {},
+                depth: 0,
+            }
         };
 
         let mut vm = init_vm.clone();
