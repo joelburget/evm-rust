@@ -2,6 +2,8 @@
 name = "evm"
 version = "0.1.0"
 authors = ["Joel Burget <joelburget@gmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/joelburget/evm-rust"
 
 [dependencies]
 num = "0.1"
