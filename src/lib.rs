@@ -295,34 +295,6 @@ pub const SWAP16: u8 = 0x9f;
 
 // a0s: logging operations
 
-macro_rules! push {
-    ($self: expr, $n: expr) => {{
-        let stk = &mut $self.state.stack;
-        let pc  = $self.state.pc;
-        let val1 = &$self.state.code[pc+1..pc+$n+1];
-        let val = U256::from_big_endian(val1);
-        $self.state.pc += $n; // pc will also be incremented by one
-        stk.push(val);
-    }}
-}
-
-macro_rules! dup {
-    ($self: expr, $n: expr) => {{
-        let stk = &mut $self.state.stack;
-        let val = stk[$n];
-        stk.push(val);
-    }}
-}
-
-macro_rules! swap {
-    ($self: expr, $n: expr) => {{
-        let stk = &mut $self.state.stack;
-        let tmp = stk[$n];
-        stk[$n] = stk[0];
-        stk[0] = tmp;
-    }}
-}
-
 fn bool_to_u256(b: bool) -> U256 {
     if b { U256::one() } else { U256::zero() }
 }
@@ -340,6 +312,27 @@ impl VM {
     pub fn step(&mut self) {
         let pc = self.state.pc;
         let op = self.state.code[pc];
+
+        if op >= PUSH1 && op <= PUSH32 {
+            let n     = usize::from(op - PUSH1 + 1);
+            let stk   = &mut self.state.stack;
+            let pc    = self.state.pc;
+            let val1  = &self.state.code[pc+1..pc+n+1];
+            let val   = U256::from_big_endian(val1);
+            self.state.pc += n; // pc will also be incremented by one
+            stk.push(val);
+        } else if op >= DUP1 && op <= DUP16 {
+            let n   = usize::from(op - DUP1 + 1);
+            let stk = &mut self.state.stack;
+            let val = stk[n];
+            stk.push(val);
+        } else if op >= SWAP1 && op <= SWAP16 {
+            let n   = usize::from(op - SWAP1 + 1);
+            let stk = &mut self.state.stack;
+            let tmp = stk[n];
+            stk[n]  = stk[0];
+            stk[0]  = tmp;
+        } else {
 
         match op {
             STOP => println!("halt!"),
@@ -470,76 +463,8 @@ impl VM {
 
             JUMPDEST => {}
 
-            // TODO: would probably be cleaner to do:
-            // if op >= PUSH1 && op <= PUSH32
-            PUSH1  => push!(self, 1),
-            PUSH2  => push!(self, 2),
-            PUSH3  => push!(self, 3),
-            PUSH4  => push!(self, 4),
-            PUSH5  => push!(self, 5),
-            PUSH6  => push!(self, 6),
-            PUSH7  => push!(self, 7),
-            PUSH8  => push!(self, 8),
-            PUSH9  => push!(self, 9),
-            PUSH10 => push!(self, 10),
-            PUSH11 => push!(self, 11),
-            PUSH12 => push!(self, 12),
-            PUSH13 => push!(self, 13),
-            PUSH14 => push!(self, 14),
-            PUSH15 => push!(self, 15),
-            PUSH16 => push!(self, 16),
-            PUSH17 => push!(self, 17),
-            PUSH18 => push!(self, 18),
-            PUSH19 => push!(self, 19),
-            PUSH20 => push!(self, 20),
-            PUSH21 => push!(self, 21),
-            PUSH22 => push!(self, 22),
-            PUSH23 => push!(self, 23),
-            PUSH24 => push!(self, 24),
-            PUSH25 => push!(self, 25),
-            PUSH26 => push!(self, 26),
-            PUSH27 => push!(self, 27),
-            PUSH28 => push!(self, 28),
-            PUSH29 => push!(self, 29),
-            PUSH30 => push!(self, 30),
-            PUSH31 => push!(self, 31),
-            PUSH32 => push!(self, 32),
-
-            DUP1  => dup!(self, 1),
-            DUP2  => dup!(self, 2),
-            DUP3  => dup!(self, 3),
-            DUP4  => dup!(self, 4),
-            DUP5  => dup!(self, 5),
-            DUP6  => dup!(self, 6),
-            DUP7  => dup!(self, 7),
-            DUP8  => dup!(self, 8),
-            DUP9  => dup!(self, 9),
-            DUP10 => dup!(self, 10),
-            DUP11 => dup!(self, 11),
-            DUP12 => dup!(self, 12),
-            DUP13 => dup!(self, 13),
-            DUP14 => dup!(self, 14),
-            DUP15 => dup!(self, 15),
-            DUP16 => dup!(self, 16),
-
-            SWAP1  => swap!(self, 1),
-            SWAP2  => swap!(self, 2),
-            SWAP3  => swap!(self, 3),
-            SWAP4  => swap!(self, 4),
-            SWAP5  => swap!(self, 5),
-            SWAP6  => swap!(self, 6),
-            SWAP7  => swap!(self, 7),
-            SWAP8  => swap!(self, 8),
-            SWAP9  => swap!(self, 9),
-            SWAP10 => swap!(self, 10),
-            SWAP11 => swap!(self, 11),
-            SWAP12 => swap!(self, 12),
-            SWAP13 => swap!(self, 13),
-            SWAP14 => swap!(self, 14),
-            SWAP15 => swap!(self, 15),
-            SWAP16 => swap!(self, 16),
-
             _    => println!("there"),
+        }
         }
 
         self.state.pc += 1;
