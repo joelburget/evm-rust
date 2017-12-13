@@ -16,7 +16,7 @@ use num::BigUint;
 
 const homestead: u32 = 1150000;
 
-type Instruction = u16;
+type Instruction = u8;
 
 #[derive(PartialEq, Clone)]
 pub struct K256(U256);
@@ -33,9 +33,9 @@ pub enum VMResult {
 #[derive(PartialEq, Clone)]
 pub struct FrameState {
     // contract
-    //     codeContract
+    code:          Vec<u8>, // XXX is code part of FrameState or Env?
     gas_available: U256,
-    pc:            U256,
+    pc:            usize, // U256,
     memory:        Vec<u8>,
     active_words:  U256,
     stack:         Vec<U256>,
@@ -178,77 +178,133 @@ pub struct VM {
 }
 
 // 0s: stop and arithmetic operations
-pub const STOP: u16 = 0x00;
-pub const ADD: u16  = 0x01;
-pub const MUL: u16  = 0x02;
-pub const SUB: u16  = 0x03;
-pub const DIV: u16  = 0x04;
+pub const STOP: u8 = 0x00;
+pub const ADD: u8  = 0x01;
+pub const MUL: u8  = 0x02;
+pub const SUB: u8  = 0x03;
+pub const DIV: u8  = 0x04;
 
 // 10s: comparison & bitwise logic operations
-pub const LT: u16     = 0x10;
-pub const GT: u16     = 0x11;
-pub const SLT: u16    = 0x12;
-pub const SGT: u16    = 0x13;
-pub const EQ: u16     = 0x14;
-pub const ISZERO: u16 = 0x15;
-pub const AND: u16    = 0x16;
-pub const OR: u16     = 0x17;
-pub const XOR: u16    = 0x18;
-pub const NOT: u16    = 0x19;
-pub const BYTE: u16    = 0x1a;
+pub const LT: u8     = 0x10;
+pub const GT: u8     = 0x11;
+pub const SLT: u8    = 0x12;
+pub const SGT: u8    = 0x13;
+pub const EQ: u8     = 0x14;
+pub const ISZERO: u8 = 0x15;
+pub const AND: u8    = 0x16;
+pub const OR: u8     = 0x17;
+pub const XOR: u8    = 0x18;
+pub const NOT: u8    = 0x19;
+pub const BYTE: u8    = 0x1a;
 
 // 20s: sha3
-pub const SHA3: u16    = 0x20;
+pub const SHA3: u8    = 0x20;
 
 // 30s: environmental information
-pub const ADDRESS: u16 = 0x30;
+pub const ADDRESS: u8 = 0x30;
+pub const BALANCE: u8 = 0x31;
+pub const ORIGIN: u8 = 0x32;
+pub const CALLER: u8 = 0x33;
+pub const CALLVALUE: u8 = 0x34;
+pub const CALLDATALOAD: u8 = 0x35;
+pub const CALLDATASIZE: u8 = 0x36;
+pub const CALLDATACOPY: u8 = 0x37;
+pub const CODESIZE: u8 = 0x38;
+pub const CODECOPY: u8 = 0x39;
+pub const GASPRICE: u8 = 0x3a;
+pub const EXTCODESIZE: u8 = 0x3b;
+pub const EXTCODECOPY: u8 = 0x3c;
 
 // 40s: block information
 // 50s: stack, memory, storage, and flow operations
-pub const POP: u16 = 0x50;
-pub const PC: u16 = 0x58;
-pub const MSIZE: u16 = 0x59;
-pub const GAS: u16 = 0x5a;
-pub const JUMPDEST: u16 = 0x5b;
+pub const POP: u8 = 0x50;
+pub const PC: u8 = 0x58;
+pub const MSIZE: u8 = 0x59;
+pub const GAS: u8 = 0x5a;
+pub const JUMPDEST: u8 = 0x5b;
+
+pub const PUSH1:  u8 = 0x60;
+pub const PUSH2:  u8 = 0x61;
+pub const PUSH3:  u8 = 0x62;
+pub const PUSH4:  u8 = 0x63;
+pub const PUSH5:  u8 = 0x64;
+pub const PUSH6:  u8 = 0x65;
+pub const PUSH7:  u8 = 0x66;
+pub const PUSH8:  u8 = 0x67;
+pub const PUSH9:  u8 = 0x68;
+pub const PUSH10: u8 = 0x69;
+pub const PUSH11: u8 = 0x6a;
+pub const PUSH12: u8 = 0x6b;
+pub const PUSH13: u8 = 0x6c;
+pub const PUSH14: u8 = 0x6d;
+pub const PUSH15: u8 = 0x6e;
+pub const PUSH16: u8 = 0x6f;
+pub const PUSH17: u8 = 0x70;
+pub const PUSH18: u8 = 0x71;
+pub const PUSH19: u8 = 0x72;
+pub const PUSH20: u8 = 0x73;
+pub const PUSH21: u8 = 0x74;
+pub const PUSH22: u8 = 0x75;
+pub const PUSH23: u8 = 0x76;
+pub const PUSH24: u8 = 0x77;
+pub const PUSH25: u8 = 0x78;
+pub const PUSH26: u8 = 0x79;
+pub const PUSH27: u8 = 0x7a;
+pub const PUSH28: u8 = 0x7b;
+pub const PUSH29: u8 = 0x7c;
+pub const PUSH30: u8 = 0x7d;
+pub const PUSH31: u8 = 0x7e;
+pub const PUSH32: u8 = 0x7f;
 
 // 60s & 70s: push operations
 // 80s: duplication operations
-pub const DUP1: u16  = 0x80;
-pub const DUP2: u16  = 0x81;
-pub const DUP3: u16  = 0x82;
-pub const DUP4: u16  = 0x83;
-pub const DUP5: u16  = 0x84;
-pub const DUP6: u16  = 0x85;
-pub const DUP7: u16  = 0x86;
-pub const DUP8: u16  = 0x87;
-pub const DUP9: u16  = 0x88;
-pub const DUP10: u16 = 0x89;
-pub const DUP11: u16 = 0x8a;
-pub const DUP12: u16 = 0x8b;
-pub const DUP13: u16 = 0x8c;
-pub const DUP14: u16 = 0x8d;
-pub const DUP15: u16 = 0x8e;
-pub const DUP16: u16 = 0x8f;
+pub const DUP1: u8  = 0x80;
+pub const DUP2: u8  = 0x81;
+pub const DUP3: u8  = 0x82;
+pub const DUP4: u8  = 0x83;
+pub const DUP5: u8  = 0x84;
+pub const DUP6: u8  = 0x85;
+pub const DUP7: u8  = 0x86;
+pub const DUP8: u8  = 0x87;
+pub const DUP9: u8  = 0x88;
+pub const DUP10: u8 = 0x89;
+pub const DUP11: u8 = 0x8a;
+pub const DUP12: u8 = 0x8b;
+pub const DUP13: u8 = 0x8c;
+pub const DUP14: u8 = 0x8d;
+pub const DUP15: u8 = 0x8e;
+pub const DUP16: u8 = 0x8f;
 
 // 90s: exchange operations
-pub const SWAP1: u16  = 0x90;
-pub const SWAP2: u16  = 0x91;
-pub const SWAP3: u16  = 0x92;
-pub const SWAP4: u16  = 0x93;
-pub const SWAP5: u16  = 0x94;
-pub const SWAP6: u16  = 0x95;
-pub const SWAP7: u16  = 0x96;
-pub const SWAP8: u16  = 0x97;
-pub const SWAP9: u16  = 0x98;
-pub const SWAP10: u16 = 0x99;
-pub const SWAP11: u16 = 0x9a;
-pub const SWAP12: u16 = 0x9b;
-pub const SWAP13: u16 = 0x9c;
-pub const SWAP14: u16 = 0x9d;
-pub const SWAP15: u16 = 0x9e;
-pub const SWAP16: u16 = 0x9f;
+pub const SWAP1: u8  = 0x90;
+pub const SWAP2: u8  = 0x91;
+pub const SWAP3: u8  = 0x92;
+pub const SWAP4: u8  = 0x93;
+pub const SWAP5: u8  = 0x94;
+pub const SWAP6: u8  = 0x95;
+pub const SWAP7: u8  = 0x96;
+pub const SWAP8: u8  = 0x97;
+pub const SWAP9: u8  = 0x98;
+pub const SWAP10: u8 = 0x99;
+pub const SWAP11: u8 = 0x9a;
+pub const SWAP12: u8 = 0x9b;
+pub const SWAP13: u8 = 0x9c;
+pub const SWAP14: u8 = 0x9d;
+pub const SWAP15: u8 = 0x9e;
+pub const SWAP16: u8 = 0x9f;
 
 // a0s: logging operations
+
+macro_rules! push {
+    ($self: expr, $n: expr) => {{
+        let stk = &mut $self.state.stack;
+        let pc  = $self.state.pc;
+        let val1 = &$self.state.code[pc+1..pc+$n+1];
+        let val = U256::from_big_endian(val1);
+        $self.state.pc += $n; // pc will also be incremented by one
+        stk.push(val);
+    }}
+}
 
 macro_rules! dup {
     ($self: expr, $n: expr) => {{
@@ -281,7 +337,10 @@ fn addr_to_u256(&Address(bytes): &Address) -> U256 {
 }
 
 impl VM {
-    pub fn step(&mut self, op: Instruction) {
+    pub fn step(&mut self) {
+        let pc = self.state.pc;
+        let op = self.state.code[pc];
+
         match op {
             STOP => println!("halt!"),
 
@@ -367,7 +426,10 @@ impl VM {
 
             ADDRESS => self.state.stack.push(addr_to_u256(&self.env.owner)),
 
-            // BALANCE
+//             BALANCE => {
+//                 let addr =
+//                 self.state
+//             }
 
             ORIGIN => self.state.stack.push(addr_to_u256(&self.env.origin)),
 
@@ -388,13 +450,18 @@ impl VM {
                 self.state.stack.push(U256::from(self.env.data.len())),
 
             // CALLDATACOPY => {}
+            // CODESIZE => {}
+            // CODECOPY => {}
+            // GASPRICE => {}
+            // EXTCODESIZE => {}
+            // EXTCODECOPY => {}
 
             POP => {
                 self.state.stack.pop();
                 return ();
             }
 
-            PC => self.state.stack.push(self.state.pc),
+            PC => self.state.stack.push(U256::from(pc)),
 
             MSIZE => self.state.stack
                 .push(U256::from(self.state.memory.len() * 32)),
@@ -402,6 +469,41 @@ impl VM {
             GAS => self.state.stack.push(self.state.gas_available),
 
             JUMPDEST => {}
+
+            // TODO: would probably be cleaner to do:
+            // if op >= PUSH1 && op <= PUSH32
+            PUSH1  => push!(self, 1),
+            PUSH2  => push!(self, 2),
+            PUSH3  => push!(self, 3),
+            PUSH4  => push!(self, 4),
+            PUSH5  => push!(self, 5),
+            PUSH6  => push!(self, 6),
+            PUSH7  => push!(self, 7),
+            PUSH8  => push!(self, 8),
+            PUSH9  => push!(self, 9),
+            PUSH10 => push!(self, 10),
+            PUSH11 => push!(self, 11),
+            PUSH12 => push!(self, 12),
+            PUSH13 => push!(self, 13),
+            PUSH14 => push!(self, 14),
+            PUSH15 => push!(self, 15),
+            PUSH16 => push!(self, 16),
+            PUSH17 => push!(self, 17),
+            PUSH18 => push!(self, 18),
+            PUSH19 => push!(self, 19),
+            PUSH20 => push!(self, 20),
+            PUSH21 => push!(self, 21),
+            PUSH22 => push!(self, 22),
+            PUSH23 => push!(self, 23),
+            PUSH24 => push!(self, 24),
+            PUSH25 => push!(self, 25),
+            PUSH26 => push!(self, 26),
+            PUSH27 => push!(self, 27),
+            PUSH28 => push!(self, 28),
+            PUSH29 => push!(self, 29),
+            PUSH30 => push!(self, 30),
+            PUSH31 => push!(self, 31),
+            PUSH32 => push!(self, 32),
 
             DUP1  => dup!(self, 1),
             DUP2  => dup!(self, 2),
@@ -439,6 +541,14 @@ impl VM {
 
             _    => println!("there"),
         }
+
+        self.state.pc += 1;
+    }
+
+    pub fn run(&mut self) {
+        while self.state.pc < self.state.code.len() {
+            self.step();
+        }
     }
 }
 
@@ -458,67 +568,60 @@ where F: Fn(U256) -> U256,
     stk[0] = result;
 }
 
+fn init_vm(code: &Vec<u8>, gas: u32) -> VM {
+    VM {
+        result: None,
+        state: FrameState {
+            code:          code.clone(),
+            gas_available: U256::from(gas),
+            pc:            0,
+            memory:        Vec::new(),
+            active_words:  U256::zero(),
+            stack:         Vec::new(),
+        },
+        env: Env {
+            owner: Address([0; 20]),
+            origin: Address([0; 20]),
+            gas_price: U256::zero(),
+            data: Vec::new(),
+            caller: Address([0; 20]),
+            transaction_value: U256::zero(),
+            code: Vec::new(),
+            header: Header {},
+            depth: 0,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use *;
 
-    #[test]
+    // #[test]
     fn it_works() {
-        let g = U256::from(30000);
-        let init_vm = VM {
-            result: None,
-            state: FrameState {
-                gas_available: g,
-                pc:            U256::zero(),
-                memory:        Vec::new(),
-                active_words:  U256::zero(),
-                stack:         vec![U256::from(1), U256::from(2)],
-            },
-            env: Env {
-                owner: Address([0; 20]),
-                origin: Address([0; 20]),
-                gas_price: U256::zero(),
-                data: Vec::new(),
-                caller: Address([0; 20]),
-                transaction_value: U256::zero(),
-                code: Vec::new(),
-                header: Header {},
-                depth: 0,
-            }
-        };
+        let mut vm = init_vm(&vec![PUSH1, 1, PUSH1, 2, ADD], 100);
+        vm.run();
+        assert_eq!(vm.state.stack[0].as_u32(), 3);
 
-        let mut vm = init_vm.clone();
-        vm.step(ADD);
-        let stack_result = vm.state.stack[0];
-        assert_eq!(stack_result.as_u32(), 3);
+        let instructions = vec![PUSH1, 1, PUSH1, 2, MUL];
+        let mut vm = init_vm(&instructions, 100);
+        vm.run();
+        assert_eq!(vm.state.stack[0].as_u32(), 2);
 
-        let mut vm = init_vm.clone();
-        vm.step(MUL);
-        let stack_result = vm.state.stack[0];
-        assert_eq!(stack_result.as_u32(), 2);
+        let mut vm = init_vm(&vec![PUSH1, 2, PUSH1, 1, SUB], 100);
+        vm.run();
+        assert_eq!(vm.state.stack[0].as_u32(), 1);
 
-        let mut vm = init_vm.clone();
-        vm.step(SUB);
-        let stack_result = vm.state.stack[0];
-        assert_eq!(
-            stack_result.low_u64(),
-            U256::overflowing_sub(U256::one(), U256::from(2)).0.low_u64()
-        );
+        let mut vm = init_vm(&vec![PUSH1, 2, PUSH1, 1, DIV], 100);
+        vm.run();
+        assert_eq!(vm.state.stack[0].as_u32(), 2);
 
-//         let mut vm = init_vm.clone();
-//         vm.step(DIV);
-//         let state = vm.state.borrow();
-//         let stack_result = state.stack.borrow()[0];
-//         assert_eq!(stack_result.as_u32(), 2);
+        let mut vm = init_vm(&vec![PUSH1, 1, PUSH1, 2, GT], 100);
+        vm.run();
+        assert_eq!(vm.state.stack[0].as_u32(), 0);
 
-        let mut vm = init_vm.clone();
-        vm.step(GT);
-        let stack_result = vm.state.stack[0];
-        assert_eq!(stack_result.as_u32(), 0);
-
-        let mut vm = init_vm.clone();
-        vm.step(LT);
-        let stack_result = vm.state.stack[0];
-        assert_eq!(stack_result.as_u32(), 1);
+        let mut vm = init_vm(&vec![PUSH1, 1, PUSH1, 2, LT], 100);
+        vm.run();
+        assert_eq!(vm.state.stack[0].as_u32(), 1);
     }
 }
