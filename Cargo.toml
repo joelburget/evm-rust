@@ -9,3 +9,5 @@ repository = "https://github.com/joelburget/evm-rust"
 num = "0.1"
 bigint = "4.2.0"
 sha3 = "0.7.2"
+nibble = { git = "https://github.com/joelburget/nibble" }
+digest = "0.7"

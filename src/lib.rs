@@ -1,14 +1,18 @@
 extern crate bigint;
 extern crate core;
+extern crate digest;
+extern crate nibble;
 extern crate num;
 extern crate sha3;
+
+mod trie;
 
 use core::clone::Clone;
 use core::ops::*;
 use std::cmp::max;
 use bigint::uint::U256;
 use num::BigUint;
-use sha3::{Digest, Keccak256};
+// use sha3::{Digest, Keccak256};
 
 const homestead: u32 = 1150000;
 
