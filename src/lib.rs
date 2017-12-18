@@ -528,8 +528,7 @@ mod tests {
         vm.run();
         assert_eq!(vm.state.stack[0].as_u32(), 3);
 
-        let instructions = vec![PUSH1, 1, PUSH1, 2, MUL];
-        let mut vm = init_vm(&instructions, 100);
+        let mut vm = init_vm(&vec![PUSH1, 1, PUSH1, 2, MUL], 100);
         vm.run();
         assert_eq!(vm.state.stack[0].as_u32(), 2);
 
