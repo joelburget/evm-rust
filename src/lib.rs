@@ -38,8 +38,10 @@ impl Stack {
         self.0.push(value);
     }
 
-    fn pop(&mut self) -> Option<U256> {
-        self.0.pop()
+    fn pop(&mut self, times: usize) {
+        for i in 0..times {
+            self.0.pop();
+        }
     }
 
     fn new() -> Stack {
@@ -414,8 +416,7 @@ impl VM {
             SUB => {
                 let stk = &mut self.state.stack;
                 let result = U256::overflowing_sub(stk[0], stk[1]).0;
-                stk.pop();
-                stk.pop();
+                stk.pop(2);
                 stk.push(result);
             }
 
@@ -466,8 +467,7 @@ impl VM {
 //                 let mut stk = stt.stack.borrow_mut();
 //                 let ix = stk[0].to_usize();
 //                 let source = stk[1];
-//                 stk.pop();
-//                 stk.pop();
+//                 stk.pop(2);
 //                 stk.push(source.byte(ix));
 //             }
 
@@ -481,8 +481,7 @@ impl VM {
 //                 hasher.input(message);
 //                 let out = hasher.result();
 
-//                 stk.pop();
-//                 stk.pop();
+//                 stk.pop(2);
 //                 stk.push(out);
 //                 stt.active_words = memory_expansion(stt.active_words, start, end);
 //             }
@@ -505,7 +504,7 @@ impl VM {
 //                 let data = self.env.data;
 //                 // XXX default to 0 for index out of bounds
 //                 let mut slice = data[ix..ix+32];
-//                 self.state.stack.pop();
+//                 self.state.stack.pop(1);
 //                 self.state.stack.push(U256::from(slice));
 //             }
 
@@ -520,7 +519,7 @@ impl VM {
             // EXTCODECOPY => {}
 
             POP => {
-                self.state.stack.pop();
+                self.state.stack.pop(1);
                 return ();
             }
 
@@ -535,8 +534,7 @@ impl VM {
 
                 self.state.m_store(loc, val);
 
-                self.state.stack.pop();
-                self.state.stack.pop();
+                self.state.stack.pop(2);
             }
 
             MSTORE8 => {
@@ -545,8 +543,7 @@ impl VM {
 
                 self.state.m_store8(loc, val);
 
-                self.state.stack.pop();
-                self.state.stack.pop();
+                self.state.stack.pop(2);
             }
 
             PC => self.state.stack.push(U256::from(pc)),
@@ -576,8 +573,7 @@ fn binary_op<F>(stk: &mut Stack, op: F)
 where F: Fn(U256, U256) -> U256,
 {
     let result = op(stk[0], stk[1]);
-    stk.pop();
-    stk.pop();
+    stk.pop(2);
     stk.push(result);
 }
 
