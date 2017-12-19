@@ -263,11 +263,18 @@ pub struct VM {
 }
 
 // 0s: stop and arithmetic operations
-pub const STOP: u8 = 0x00;
-pub const ADD:  u8 = 0x01;
-pub const MUL:  u8 = 0x02;
-pub const SUB:  u8 = 0x03;
-pub const DIV:  u8 = 0x04;
+pub const STOP:       u8 = 0x00;
+pub const ADD:        u8 = 0x01;
+pub const MUL:        u8 = 0x02;
+pub const SUB:        u8 = 0x03;
+pub const DIV:        u8 = 0x04;
+pub const SDIV:       u8 = 0x05;
+pub const MOD:        u8 = 0x06;
+pub const SMOD:       u8 = 0x07;
+pub const ADDMOD:     u8 = 0x08;
+pub const MULMOD:     u8 = 0x09;
+pub const EXP:        u8 = 0x0a;
+pub const SIGNEXTEND: u8 = 0x0b;
 
 // 10s: comparison & bitwise logic operations
 pub const LT:     u8 = 0x10;
@@ -451,9 +458,17 @@ impl VM {
                 let result = U256::overflowing_sub(state.stack[0], state.stack[1]).0;
                 state.stack.pop(2);
                 state.stack.push(result);
-            }
+            },
 
             DIV => state.stack.apply_binary_op(|x, y| { x / y }),
+
+            SDIV       => panic!("unimplemented: SDIV"),
+            MOD        => panic!("unimplemented: MOD"),
+            SMOD       => panic!("unimplemented: SMOD"),
+            ADDMOD     => panic!("unimplemented: ADDMOD"),
+            MULMOD     => panic!("unimplemented: MULMOD"),
+            EXP        => panic!("unimplemented: EXP"),
+            SIGNEXTEND => panic!("unimplemented: SIGNEXTEND"),
 
             LT => state.stack.apply_binary_op(|x, y| bool_to_u256(x < y)),
 
@@ -477,14 +492,13 @@ impl VM {
 
             NOT => state.stack.apply_unary_op(Not::not),
 
-//             BYTE => {
-//                 let stt = self.state.borrow_mut();
-//                 let mut stk = stt.stack.borrow_mut();
-//                 let ix = stk[0].to_usize();
-//                 let source = stk[1];
-//                 stk.pop(2);
-//                 stk.push(source.byte(ix));
-//             }
+            BYTE => {
+                let stk    = &mut state.stack;
+                let ix     = stk[0].as_u64() as usize;
+                let source = stk[1];
+                stk.pop(2);
+                stk.push(U256::from_big_endian(&[source.byte(ix)]));
+            },
 
 //             SHA3 => {
 //                 let mut hasher = Keccak256::default();
