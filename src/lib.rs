@@ -154,23 +154,24 @@ impl Clone for Bloom {
     fn clone(&self) -> Bloom { Bloom(self.0) }
 }
 
+// for now, filter down to only the fields we actually use
 #[derive(PartialEq, Clone)]
 pub struct Block {
-    parent_hash: K256,
-    ommers_hash: K256,
+    // parent_hash: K256,
+    // ommers_hash: K256,
     beneficiary: Address,
-    state_root: K256,
-    transactions_root: K256,
-    receipts_root: K256,
-    logs_bloom: Bloom,
+    // state_root: K256,
+    // transactions_root: K256,
+    // receipts_root: K256,
+    // logs_bloom: Bloom,
     difficulty: BigUint,
     number: BigUint,
     gas_limit: BigUint,
-    gas_used: BigUint,
+    // gas_used: BigUint,
     timestamp: BigUint,
-    extra_data: Vec<u8>,
-    mix_hash: K256,
-    nonce: u64,
+    // extra_data: Vec<u8>,
+    // mix_hash: K256,
+    // nonce: u64,
 }
 
 #[derive(PartialEq, Clone)]
@@ -243,7 +244,7 @@ pub struct VM {
     state:  FrameState,
     // frames: Array<Frame>,
     env: Env,
-    // block
+    block: Block,
 }
 
 // 0s: stop and arithmetic operations
@@ -285,6 +286,13 @@ pub const EXTCODESIZE:  u8 = 0x3b;
 pub const EXTCODECOPY:  u8 = 0x3c;
 
 // 40s: block information
+pub const BLOCKHASH:  u8 = 0x40;
+pub const COINBASE:   u8 = 0x41;
+pub const TIMESTAMP:  u8 = 0x42;
+pub const NUMBER:     u8 = 0x43;
+pub const DIFFICULTY: u8 = 0x44;
+pub const GASLIMIT:   u8 = 0x45;
+
 // 50s: stack, memory, storage, and flow operations
 pub const POP:      u8 = 0x50;
 pub const MLOAD:    u8 = 0x51;
@@ -369,17 +377,22 @@ pub const SWAP16: u8 = 0x9f;
 
 // a0s: logging operations
 
-fn bool_to_u256(b: bool) -> U256 {
-    if b { U256::one() } else { U256::zero() }
-}
-
 // Should these be 256 bit or smaller?
 fn memory_expansion(s: U256, f: U256, l: U256) -> U256 {
     if l.is_zero() { s } else { max(s, (f + l) / U256::from(32)) }
 }
 
+fn bool_to_u256(b: bool) -> U256 {
+    if b { U256::one() } else { U256::zero() }
+}
+
 fn addr_to_u256(&Address(bytes): &Address) -> U256 {
     return U256::from_big_endian(&bytes[0..20]);
+}
+
+fn big_to_u256(big: &BigUint) -> U256 {
+    let bytes = big.to_bytes_be();
+    return U256::from_big_endian(&bytes);
 }
 
 pub enum InstructionResult {
@@ -527,6 +540,18 @@ impl VM {
             // EXTCODESIZE => {}
             // EXTCODECOPY => {}
 
+            BLOCKHASH => println!("unimplemented: BLOCKHASH"),
+            COINBASE =>
+                self.state.stack.push(addr_to_u256(&self.block.beneficiary)),
+            TIMESTAMP =>
+                self.state.stack.push(big_to_u256(&self.block.timestamp)),
+            NUMBER =>
+                self.state.stack.push(big_to_u256(&self.block.number)),
+            DIFFICULTY =>
+                self.state.stack.push(big_to_u256(&self.block.difficulty)),
+            GASLIMIT =>
+                self.state.stack.push(big_to_u256(&self.block.gas_limit)),
+
             POP => {
                 self.state.stack.pop(1);
                 return Normal;
@@ -633,6 +658,13 @@ fn init_vm(code: &Vec<u8>, gas: u32) -> VM {
             code: Vec::new(),
             header: Header {},
             depth: 0,
+        },
+        block: Block {
+            beneficiary: Address([0; 20]),
+            difficulty: BigUint::new(Vec::new()),
+            number: BigUint::new(Vec::new()),
+            gas_limit: BigUint::new(Vec::new()),
+            timestamp: BigUint::new(Vec::new()),
         }
     }
 }
