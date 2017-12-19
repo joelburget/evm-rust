@@ -31,6 +31,40 @@ pub enum VMResult {
 }
 
 #[derive(PartialEq, Clone)]
+pub struct Stack(Vec<U256>);
+
+impl Stack {
+    fn push(&mut self, value: U256) {
+        self.0.push(value);
+    }
+
+    fn pop(&mut self) -> Option<U256> {
+        self.0.pop()
+    }
+
+    fn new() -> Stack {
+        return Stack(Vec::new());
+    }
+}
+
+impl Index<usize> for Stack {
+    type Output = U256;
+
+    fn index<'a>(&'a self, index: usize) -> &'a U256 {
+        let veclen = self.0.len();
+        return &self.0[veclen - index - 1];
+    }
+}
+
+impl IndexMut<usize> for Stack {
+    fn index_mut(&mut self, index: usize) -> &mut U256 {
+        let veclen = self.0.len();
+        return &mut self.0[veclen - index - 1];
+    }
+}
+
+// Mostly from 9.4.1: Machine State
+#[derive(PartialEq, Clone)]
 pub struct FrameState {
     // contract
     code:          Vec<u8>, // XXX is code part of FrameState or Env?
@@ -38,12 +72,45 @@ pub struct FrameState {
     pc:            usize, // U256,
     memory:        Vec<u8>,
     active_words:  U256,
-    stack:         Vec<U256>,
-    //     memory
+    stack:         Stack,
     //     memorySize
     //     calldata
     //     callvalue
     //     caller
+}
+
+impl FrameState {
+    pub fn m_store(&mut self, loc: usize, word: U256) {
+        let mut bytes: [u8; 32] = [0; 32];
+        word.to_big_endian(&mut bytes);
+
+        for i in self.memory.len() .. loc + 32 {
+            self.memory.push(0);
+        }
+
+        for (i, byte) in bytes.iter().enumerate() {
+            self.memory[loc + i] = *byte;
+        }
+        self.active_words = self.active_words.max(U256::from((loc + 32) / 32));
+    }
+
+    pub fn m_store8(&mut self, loc: usize, byte: u8) {
+        for i in self.memory.len() .. loc + 1 {
+            self.memory.push(0);
+        }
+
+        self.memory[loc] = byte;
+        self.active_words = self.active_words.max(U256::from((loc + 1) / 32));
+    }
+
+    pub fn m_load(&mut self, loc: usize) -> U256 {
+        if self.memory.len() < loc + 32 {
+            self.memory.resize(loc + 32, 0);
+        }
+
+        self.active_words = self.active_words.max(U256::from((loc + 32) / 32));
+        return U256::from_big_endian(&self.memory[loc..loc+32]);
+    }
 }
 
 #[derive(PartialEq, Clone)]
@@ -179,48 +246,51 @@ pub struct VM {
 
 // 0s: stop and arithmetic operations
 pub const STOP: u8 = 0x00;
-pub const ADD: u8  = 0x01;
-pub const MUL: u8  = 0x02;
-pub const SUB: u8  = 0x03;
-pub const DIV: u8  = 0x04;
+pub const ADD:  u8 = 0x01;
+pub const MUL:  u8 = 0x02;
+pub const SUB:  u8 = 0x03;
+pub const DIV:  u8 = 0x04;
 
 // 10s: comparison & bitwise logic operations
-pub const LT: u8     = 0x10;
-pub const GT: u8     = 0x11;
-pub const SLT: u8    = 0x12;
-pub const SGT: u8    = 0x13;
-pub const EQ: u8     = 0x14;
+pub const LT:     u8 = 0x10;
+pub const GT:     u8 = 0x11;
+pub const SLT:    u8 = 0x12;
+pub const SGT:    u8 = 0x13;
+pub const EQ:     u8 = 0x14;
 pub const ISZERO: u8 = 0x15;
-pub const AND: u8    = 0x16;
-pub const OR: u8     = 0x17;
-pub const XOR: u8    = 0x18;
-pub const NOT: u8    = 0x19;
-pub const BYTE: u8    = 0x1a;
+pub const AND:    u8 = 0x16;
+pub const OR:     u8 = 0x17;
+pub const XOR:    u8 = 0x18;
+pub const NOT:    u8 = 0x19;
+pub const BYTE:   u8 = 0x1a;
 
 // 20s: sha3
 pub const SHA3: u8    = 0x20;
 
 // 30s: environmental information
-pub const ADDRESS: u8 = 0x30;
-pub const BALANCE: u8 = 0x31;
-pub const ORIGIN: u8 = 0x32;
-pub const CALLER: u8 = 0x33;
-pub const CALLVALUE: u8 = 0x34;
+pub const ADDRESS:      u8 = 0x30;
+pub const BALANCE:      u8 = 0x31;
+pub const ORIGIN:       u8 = 0x32;
+pub const CALLER:       u8 = 0x33;
+pub const CALLVALUE:    u8 = 0x34;
 pub const CALLDATALOAD: u8 = 0x35;
 pub const CALLDATASIZE: u8 = 0x36;
 pub const CALLDATACOPY: u8 = 0x37;
-pub const CODESIZE: u8 = 0x38;
-pub const CODECOPY: u8 = 0x39;
-pub const GASPRICE: u8 = 0x3a;
-pub const EXTCODESIZE: u8 = 0x3b;
-pub const EXTCODECOPY: u8 = 0x3c;
+pub const CODESIZE:     u8 = 0x38;
+pub const CODECOPY:     u8 = 0x39;
+pub const GASPRICE:     u8 = 0x3a;
+pub const EXTCODESIZE:  u8 = 0x3b;
+pub const EXTCODECOPY:  u8 = 0x3c;
 
 // 40s: block information
 // 50s: stack, memory, storage, and flow operations
-pub const POP: u8 = 0x50;
-pub const PC: u8 = 0x58;
-pub const MSIZE: u8 = 0x59;
-pub const GAS: u8 = 0x5a;
+pub const POP:      u8 = 0x50;
+pub const MLOAD:    u8 = 0x51;
+pub const MSTORE:   u8 = 0x52;
+pub const MSTORE8:  u8 = 0x53;
+pub const PC:       u8 = 0x58;
+pub const MSIZE:    u8 = 0x59;
+pub const GAS:      u8 = 0x5a;
 pub const JUMPDEST: u8 = 0x5b;
 
 pub const PUSH1:  u8 = 0x60;
@@ -454,6 +524,31 @@ impl VM {
                 return ();
             }
 
+            MLOAD => {
+                let loc = self.state.stack[0].low_u32() as usize;
+                self.state.stack[0] = self.state.m_load(loc);
+            }
+
+            MSTORE => {
+                let loc = self.state.stack[0].low_u32() as usize;
+                let val = self.state.stack[1];
+
+                self.state.m_store(loc, val);
+
+                self.state.stack.pop();
+                self.state.stack.pop();
+            }
+
+            MSTORE8 => {
+                let loc = self.state.stack[0].low_u32() as usize;
+                let val = self.state.stack[1].low_u32() as u8;
+
+                self.state.m_store8(loc, val);
+
+                self.state.stack.pop();
+                self.state.stack.pop();
+            }
+
             PC => self.state.stack.push(U256::from(pc)),
 
             MSIZE => self.state.stack
@@ -477,7 +572,7 @@ impl VM {
     }
 }
 
-fn binary_op<F>(stk: &mut Vec<U256>, op: F)
+fn binary_op<F>(stk: &mut Stack, op: F)
 where F: Fn(U256, U256) -> U256,
 {
     let result = op(stk[0], stk[1]);
@@ -486,7 +581,7 @@ where F: Fn(U256, U256) -> U256,
     stk.push(result);
 }
 
-fn unary_op<F>(stk: &mut Vec<U256>, op: F)
+fn unary_op<F>(stk: &mut Stack, op: F)
 where F: Fn(U256) -> U256,
 {
     let result = op(stk[0]);
@@ -502,7 +597,7 @@ fn init_vm(code: &Vec<u8>, gas: u32) -> VM {
             pc:            0,
             memory:        Vec::new(),
             active_words:  U256::zero(),
-            stack:         Vec::new(),
+            stack:         Stack::new(),
         },
         env: Env {
             owner: Address([0; 20]),
@@ -522,7 +617,7 @@ fn init_vm(code: &Vec<u8>, gas: u32) -> VM {
 mod tests {
     use *;
 
-    // #[test]
+    #[test]
     fn it_works() {
         let mut vm = init_vm(&vec![PUSH1, 1, PUSH1, 2, ADD], 100);
         vm.run();
@@ -532,20 +627,32 @@ mod tests {
         vm.run();
         assert_eq!(vm.state.stack[0].as_u32(), 2);
 
-        let mut vm = init_vm(&vec![PUSH1, 2, PUSH1, 1, SUB], 100);
+        let mut vm = init_vm(&vec![PUSH1, 1, PUSH1, 2, SUB], 100);
         vm.run();
         assert_eq!(vm.state.stack[0].as_u32(), 1);
 
-        let mut vm = init_vm(&vec![PUSH1, 2, PUSH1, 1, DIV], 100);
+        let mut vm = init_vm(&vec![PUSH1, 1, PUSH1, 2, DIV], 100);
         vm.run();
         assert_eq!(vm.state.stack[0].as_u32(), 2);
 
-        let mut vm = init_vm(&vec![PUSH1, 1, PUSH1, 2, GT], 100);
+        let mut vm = init_vm(&vec![PUSH1, 2, PUSH1, 1, GT], 100);
         vm.run();
         assert_eq!(vm.state.stack[0].as_u32(), 0);
 
-        let mut vm = init_vm(&vec![PUSH1, 1, PUSH1, 2, LT], 100);
+        let mut vm = init_vm(&vec![PUSH1, 2, PUSH1, 1, LT], 100);
         vm.run();
         assert_eq!(vm.state.stack[0].as_u32(), 1);
+
+        // store 123 at 200, then load it back
+        // 7 words = 200 / 32
+        let mut vm = init_vm(&vec![PUSH1, 123, PUSH1, 200, MSTORE, PUSH1, 200, MLOAD], 100);
+        vm.run();
+        assert_eq!(vm.state.stack[0].as_u32(), 123);
+        assert_eq!(vm.state.active_words.as_u32(), 7);
+
+        let mut vm = init_vm(&vec![PUSH1, 123, PUSH1, 231, MSTORE8, PUSH1, 200, MLOAD], 100);
+        vm.run();
+        assert_eq!(vm.state.stack[0].as_u32(), 123);
+        assert_eq!(vm.state.active_words.as_u32(), 7);
     }
 }
