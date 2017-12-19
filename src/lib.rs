@@ -34,6 +34,10 @@ pub enum VMResult {
 pub struct Stack(Vec<U256>);
 
 impl Stack {
+    fn new() -> Stack {
+        return Stack(Vec::new());
+    }
+
     fn push(&mut self, value: U256) {
         self.0.push(value);
     }
@@ -44,8 +48,19 @@ impl Stack {
         }
     }
 
-    fn new() -> Stack {
-        return Stack(Vec::new());
+    fn apply_binary_op<F>(&mut self, op: F)
+    where F: Fn(U256, U256) -> U256,
+    {
+        let result = op(self[0], self[1]);
+        self.pop(2);
+        self.push(result);
+    }
+
+    fn apply_unary_op<F>(&mut self, op: F)
+    where F: Fn(U256) -> U256,
+    {
+        let result = op(self[0]);
+        self[0] = result;
     }
 }
 
@@ -404,85 +419,63 @@ impl VM {
     pub fn step(&mut self) -> InstructionResult {
         use InstructionResult::*;
 
-        let pc = self.state.pc;
-        let op = self.state.code[pc];
+        let pc    = self.state.pc;
+        let op    = self.state.code[pc];
+        let state = &mut self.state;
 
         if op >= PUSH1 && op <= PUSH32 {
-            let n     = usize::from(op - PUSH1 + 1);
-            let stk   = &mut self.state.stack;
-            let pc    = self.state.pc;
-            let val1  = &self.state.code[pc+1..pc+n+1];
-            let val   = U256::from_big_endian(val1);
-            self.state.pc += n; // pc will also be incremented by one
-            stk.push(val);
+            let n    = usize::from(op - PUSH1 + 1);
+            let val1 = &state.code[pc+1..pc+n+1];
+            let val  = U256::from_big_endian(val1);
+            state.pc += n; // pc will also be incremented by one
+            state.stack.push(val);
         } else if op >= DUP1 && op <= DUP16 {
             let n   = usize::from(op - DUP1 + 1);
-            let stk = &mut self.state.stack;
-            let val = stk[n];
-            stk.push(val);
+            let val = state.stack[n];
+            state.stack.push(val);
         } else if op >= SWAP1 && op <= SWAP16 {
             let n   = usize::from(op - SWAP1 + 1);
-            let stk = &mut self.state.stack;
-            let tmp = stk[n];
-            stk[n]  = stk[0];
-            stk[0]  = tmp;
+            let tmp = state.stack[n];
+            state.stack[n]  = state.stack[0];
+            state.stack[0]  = tmp;
         } else {
 
         match op {
-            STOP => { return Halt; }
+            STOP => { return Halt; },
 
-            ADD => binary_op(&mut self.state.stack, Add::add),
+            ADD => state.stack.apply_binary_op(Add::add),
 
-            MUL => binary_op(&mut self.state.stack, Mul::mul),
+            MUL => state.stack.apply_binary_op(Mul::mul),
 
             SUB => {
-                let stk = &mut self.state.stack;
-                let result = U256::overflowing_sub(stk[0], stk[1]).0;
-                stk.pop(2);
-                stk.push(result);
+                let result = U256::overflowing_sub(state.stack[0], state.stack[1]).0;
+                state.stack.pop(2);
+                state.stack.push(result);
             }
 
-            DIV => binary_op(&mut self.state.stack, |x, y| { x / y }),
+            DIV => state.stack.apply_binary_op(|x, y| { x / y }),
 
-            LT => binary_op(
-                &mut self.state.stack,
-                |x, y| bool_to_u256(x < y)
-            ),
+            LT => state.stack.apply_binary_op(|x, y| bool_to_u256(x < y)),
 
-            GT => binary_op(
-                &mut self.state.stack,
-                |x, y| bool_to_u256(x > y)
-            ),
+            GT => state.stack.apply_binary_op(|x, y| bool_to_u256(x > y)),
 
             // XXX make signed
-            SLT => binary_op(
-                &mut self.state.stack,
-                |x, y| bool_to_u256(x < y)
-            ),
+            SLT => state.stack.apply_binary_op(|x, y| bool_to_u256(x < y)),
 
             // XXX make signed
-            SGT => binary_op(
-                &mut self.state.stack,
-                |x, y| bool_to_u256(x < y)
-            ),
+            SGT => state.stack.apply_binary_op(|x, y| bool_to_u256(x < y)),
 
-            EQ => binary_op(
-                &mut self.state.stack,
-                |x, y| bool_to_u256(x == y)
-            ),
+            EQ => state.stack.apply_binary_op(|x, y| bool_to_u256(x == y)),
 
-            ISZERO => unary_op(
-                &mut self.state.stack,
-                |x| bool_to_u256(x.is_zero())
-            ),
+            ISZERO => state.stack.apply_unary_op(|x| bool_to_u256(x.is_zero())),
 
-            AND => binary_op(&mut self.state.stack, BitAnd::bitand),
+            AND => state.stack.apply_binary_op(BitAnd::bitand),
 
-            OR  => binary_op(&mut self.state.stack, BitOr::bitor),
+            OR  => state.stack.apply_binary_op(BitOr::bitor),
 
-            XOR => binary_op(&mut self.state.stack, BitXor::bitxor),
+            XOR => state.stack.apply_binary_op(BitXor::bitxor),
 
-            NOT => unary_op(&mut self.state.stack, Not::not),
+            NOT => state.stack.apply_unary_op(Not::not),
 
 //             BYTE => {
 //                 let stt = self.state.borrow_mut();
@@ -508,18 +501,18 @@ impl VM {
 //                 stt.active_words = memory_expansion(stt.active_words, start, end);
 //             }
 
-            ADDRESS => self.state.stack.push(addr_to_u256(&self.env.owner)),
+            ADDRESS => state.stack.push(addr_to_u256(&self.env.owner)),
 
 //             BALANCE => {
 //                 let addr =
 //                 self.state
 //             }
 
-            ORIGIN => self.state.stack.push(addr_to_u256(&self.env.origin)),
+            ORIGIN => state.stack.push(addr_to_u256(&self.env.origin)),
 
-            CALLER => self.state.stack.push(addr_to_u256(&self.env.caller)),
+            CALLER => state.stack.push(addr_to_u256(&self.env.caller)),
 
-            CALLVALUE => self.state.stack.push(self.env.transaction_value),
+            CALLVALUE => state.stack.push(self.env.transaction_value),
 
 //             CALLDATALOAD => {
 //                 let ix = &mut self.state.stack[0];
@@ -531,7 +524,7 @@ impl VM {
 //             }
 
             CALLDATASIZE =>
-                self.state.stack.push(U256::from(self.env.data.len())),
+                state.stack.push(U256::from(self.env.data.len())),
 
             // CALLDATACOPY => {}
             // CODESIZE => {}
@@ -541,78 +534,81 @@ impl VM {
             // EXTCODECOPY => {}
 
             BLOCKHASH => println!("unimplemented: BLOCKHASH"),
-            COINBASE =>
-                self.state.stack.push(addr_to_u256(&self.block.beneficiary)),
-            TIMESTAMP =>
-                self.state.stack.push(big_to_u256(&self.block.timestamp)),
-            NUMBER =>
-                self.state.stack.push(big_to_u256(&self.block.number)),
-            DIFFICULTY =>
-                self.state.stack.push(big_to_u256(&self.block.difficulty)),
-            GASLIMIT =>
-                self.state.stack.push(big_to_u256(&self.block.gas_limit)),
 
-            POP => {
-                self.state.stack.pop(1);
-                return Normal;
-            }
+            COINBASE =>
+                state.stack.push(addr_to_u256(&self.block.beneficiary)),
+
+            TIMESTAMP =>
+                state.stack.push(big_to_u256(&self.block.timestamp)),
+
+            NUMBER =>
+                state.stack.push(big_to_u256(&self.block.number)),
+
+            DIFFICULTY =>
+                state.stack.push(big_to_u256(&self.block.difficulty)),
+
+            GASLIMIT =>
+                state.stack.push(big_to_u256(&self.block.gas_limit)),
+
+            POP => state.stack.pop(1),
 
             MLOAD => {
-                let loc = self.state.stack[0].low_u32() as usize;
-                self.state.stack[0] = self.state.m_load(loc);
-            }
+                let loc = state.stack[0].low_u32() as usize;
+                state.stack[0] = state.m_load(loc);
+            },
 
             MSTORE => {
-                let loc = self.state.stack[0].low_u32() as usize;
-                let val = self.state.stack[1];
+                let loc = state.stack[0].low_u32() as usize;
+                let val = state.stack[1];
 
-                self.state.m_store(loc, val);
+                state.m_store(loc, val);
 
-                self.state.stack.pop(2);
-            }
+                state.stack.pop(2);
+            },
 
             MSTORE8 => {
-                let loc = self.state.stack[0].low_u32() as usize;
-                let val = self.state.stack[1].low_u32() as u8;
+                let loc = state.stack[0].low_u32() as usize;
+                let val = state.stack[1].low_u32() as u8;
 
-                self.state.m_store8(loc, val);
+                state.m_store8(loc, val);
 
-                self.state.stack.pop(2);
-            }
+                state.stack.pop(2);
+            },
 
             JUMP => {
-                let loc = self.state.stack[0];
-                self.state.stack.pop(1);
-                self.state.pc = loc.low_u64() as usize;
+                let loc = state.stack[0];
+                state.stack.pop(1);
+                state.pc = loc.low_u64() as usize;
                 return Normal;
             },
 
             JUMPI => {
-                let loc = self.state.stack[0];
-                let b   = self.state.stack[1];
-                self.state.stack.pop(2);
+                let loc = state.stack[0];
+                let b   = state.stack[1];
+                state.stack.pop(2);
 
                 if b != U256::zero() {
-                    self.state.pc = loc.low_u64() as usize;
+                    state.pc = loc.low_u64() as usize;
                     return Normal;
-                }
+                };
             },
 
-            PC => self.state.stack.push(U256::from(pc)),
+            PC => state.stack.push(U256::from(pc)),
 
-            MSIZE => self.state.stack
-                .push(U256::from(self.state.memory.len() * 32)),
+            MSIZE => state.stack
+                .push(U256::from(state.memory.len() * 32)),
 
-            GAS => self.state.stack.push(self.state.gas_available),
+            GAS => state.stack.push(state.gas_available),
 
             JUMPDEST => {}
 
-            _    => println!("unimplemented instruction: {}", op),
+            _ => println!("unimplemented instruction: {}", op),
         }
-        }
+        };
 
-        self.state.pc += 1;
-        return Normal;
+        state.pc += 1;
+
+        Normal
     }
 
     pub fn run(&mut self) {
@@ -620,21 +616,6 @@ impl VM {
             self.step();
         }
     }
-}
-
-fn binary_op<F>(stk: &mut Stack, op: F)
-where F: Fn(U256, U256) -> U256,
-{
-    let result = op(stk[0], stk[1]);
-    stk.pop(2);
-    stk.push(result);
-}
-
-fn unary_op<F>(stk: &mut Stack, op: F)
-where F: Fn(U256) -> U256,
-{
-    let result = op(stk[0]);
-    stk[0] = result;
 }
 
 fn init_vm(code: &Vec<u8>, gas: u32) -> VM {
