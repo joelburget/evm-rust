@@ -8,7 +8,7 @@ extern crate sha3;
 mod trie;
 
 use core::clone::Clone;
-use core::ops::*;
+use core::ops::{Add,BitAnd,BitOr,BitXor,Index,IndexMut,Mul,Not};
 use std::cmp::max;
 use bigint::uint::U256;
 use num::BigUint;
