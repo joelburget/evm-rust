@@ -290,6 +290,8 @@ pub const POP:      u8 = 0x50;
 pub const MLOAD:    u8 = 0x51;
 pub const MSTORE:   u8 = 0x52;
 pub const MSTORE8:  u8 = 0x53;
+pub const JUMP:     u8 = 0x54;
+pub const JUMPI:    u8 = 0x55;
 pub const PC:       u8 = 0x58;
 pub const MSIZE:    u8 = 0x59;
 pub const GAS:      u8 = 0x5a;
@@ -546,6 +548,24 @@ impl VM {
                 self.state.stack.pop(2);
             }
 
+            JUMP => {
+                let loc = self.state.stack[0];
+                self.state.stack.pop(1);
+                self.state.pc = loc.low_u64() as usize;
+                return;
+            },
+
+            JUMPI => {
+                let loc = self.state.stack[0];
+                let b   = self.state.stack[1];
+                self.state.stack.pop(2);
+
+                if b != U256::zero() {
+                    self.state.pc = loc.low_u64() as usize;
+                    return
+                }
+            },
+
             PC => self.state.stack.push(U256::from(pc)),
 
             MSIZE => self.state.stack
@@ -650,5 +670,9 @@ mod tests {
         vm.run();
         assert_eq!(vm.state.stack[0].as_u32(), 123);
         assert_eq!(vm.state.active_words.as_u32(), 7);
+
+        let mut vm = init_vm(&vec![PUSH1, 20, JUMP, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, PUSH1, 123], 100);
+        vm.run();
+        assert_eq!(vm.state.stack[0].as_u32(), 123);
     }
 }
