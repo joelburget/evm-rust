@@ -382,8 +382,15 @@ fn addr_to_u256(&Address(bytes): &Address) -> U256 {
     return U256::from_big_endian(&bytes[0..20]);
 }
 
+pub enum InstructionResult {
+    Normal,
+    Halt,
+}
+
 impl VM {
-    pub fn step(&mut self) {
+    pub fn step(&mut self) -> InstructionResult {
+        use InstructionResult::*;
+
         let pc = self.state.pc;
         let op = self.state.code[pc];
 
@@ -409,7 +416,7 @@ impl VM {
         } else {
 
         match op {
-            STOP => println!("halt!"),
+            STOP => { return Halt; }
 
             ADD => binary_op(&mut self.state.stack, Add::add),
 
@@ -522,7 +529,7 @@ impl VM {
 
             POP => {
                 self.state.stack.pop(1);
-                return ();
+                return Normal;
             }
 
             MLOAD => {
@@ -552,7 +559,7 @@ impl VM {
                 let loc = self.state.stack[0];
                 self.state.stack.pop(1);
                 self.state.pc = loc.low_u64() as usize;
-                return;
+                return Normal;
             },
 
             JUMPI => {
@@ -562,7 +569,7 @@ impl VM {
 
                 if b != U256::zero() {
                     self.state.pc = loc.low_u64() as usize;
-                    return
+                    return Normal;
                 }
             },
 
@@ -575,11 +582,12 @@ impl VM {
 
             JUMPDEST => {}
 
-            _    => println!("there"),
+            _    => println!("unimplemented instruction: {}", op),
         }
         }
 
         self.state.pc += 1;
+        return Normal;
     }
 
     pub fn run(&mut self) {
