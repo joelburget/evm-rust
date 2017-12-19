@@ -533,7 +533,7 @@ impl VM {
             // EXTCODESIZE => {}
             // EXTCODECOPY => {}
 
-            BLOCKHASH => println!("unimplemented: BLOCKHASH"),
+            BLOCKHASH => panic!("unimplemented: BLOCKHASH"),
 
             COINBASE =>
                 state.stack.push(addr_to_u256(&self.block.beneficiary)),
@@ -602,7 +602,7 @@ impl VM {
 
             JUMPDEST => {}
 
-            _ => println!("unimplemented instruction: {}", op),
+            _ => panic!("unimplemented instruction: {}", op),
         }
         };
 
