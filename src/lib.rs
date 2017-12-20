@@ -460,7 +460,13 @@ impl VM {
                 state.stack.push(result);
             },
 
-            DIV => state.stack.apply_binary_op(|x, y| { x / y }),
+            DIV => state.stack.apply_binary_op(|s0, s1|
+                if s1.is_zero() {
+                    U256::zero()
+                } else {
+                    s0 / s1
+                }
+            ),
 
             SDIV       => panic!("unimplemented: SDIV"),
             MOD        => panic!("unimplemented: MOD"),
@@ -709,5 +715,10 @@ mod tests {
         let mut vm = init_vm(&vec![PUSH1, 20, JUMP, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, PUSH1, 123], 100);
         vm.run();
         assert_eq!(vm.state.stack[0].as_u32(), 123);
+
+        // Div by zero
+        let mut vm = init_vm(&vec![PUSH1, 0, PUSH1, 1, DIV], 100);
+        vm.run();
+        assert_eq!(vm.state.stack[0].as_u32(), 0);
     }
 }
