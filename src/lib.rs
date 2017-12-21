@@ -464,11 +464,42 @@ impl VM {
                 if s1.is_zero() {
                     U256::zero()
                 } else {
-                    s0 / s1
+                    s0 / s1 // can overflow, which is what we want
                 }
             ),
 
-            SDIV       => panic!("unimplemented: SDIV"),
+            // TODO: we should probably add a "newtype wrapper" for U256 for
+            // signed semantics
+
+            // Truncated signed integer division
+            SDIV => state.stack.apply_binary_op(|s0, s1|
+                if s1.is_zero() {
+                    U256::zero()
+                } else {
+                    let min_value = (U256::one() << 255) - U256::one();
+                    let negative_one = !U256::zero();
+
+                    if s0 == min_value && s1 == negative_one {
+                        // Fixed point:
+                        min_value
+                    } else {
+                        let is_pos = |U256(u64s): U256| u64s[3].leading_zeros() == 0;
+                        let invert = |x: U256| x^negative_one + U256::one();
+                        let abs = |x: U256| if is_pos(x) { x } else { invert(x) };
+
+                        // Do the division on the positive numbers
+                        let divisor = abs(s0) / abs(s1);
+
+                        // Invert result if signs don't match
+                        if is_pos(s0) ^ is_pos(s1) {
+                            invert(divisor)
+                        } else {
+                            divisor
+                        }
+                    }
+                }
+            ),
+
             MOD        => panic!("unimplemented: MOD"),
             SMOD       => panic!("unimplemented: SMOD"),
             ADDMOD     => panic!("unimplemented: ADDMOD"),
