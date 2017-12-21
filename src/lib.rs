@@ -8,7 +8,7 @@ extern crate sha3;
 mod trie;
 
 use core::clone::Clone;
-use core::ops::{Add,BitAnd,BitOr,BitXor,Index,IndexMut,Mul,Not};
+use core::ops::{Add,BitAnd,BitOr,BitXor,Index,IndexMut,Mul,Not,Sub};
 use std::cmp::max;
 use bigint::uint::U256;
 use num::BigUint;
@@ -454,11 +454,7 @@ impl VM {
 
             MUL => state.stack.apply_binary_op(Mul::mul),
 
-            SUB => {
-                let result = U256::overflowing_sub(state.stack[0], state.stack[1]).0;
-                state.stack.pop(2);
-                state.stack.push(result);
-            },
+            SUB => state.stack.apply_binary_op(Sub::sub),
 
             DIV => state.stack.apply_binary_op(|s0, s1|
                 if s1.is_zero() {
