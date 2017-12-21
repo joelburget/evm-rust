@@ -479,15 +479,15 @@ impl VM {
                         // Fixed point:
                         min_value
                     } else {
-                        let is_pos = |U256(u64s): U256| u64s[3].leading_zeros() == 0;
+                        let is_neg = |U256(u64s): U256| u64s[3].leading_zeros() == 0;
                         let invert = |x: U256| x^negative_one + U256::one();
-                        let abs = |x: U256| if is_pos(x) { x } else { invert(x) };
+                        let abs = |x: U256| if is_neg(x) { invert(x) } else { x };
 
                         // Do the division on the positive numbers
                         let divisor = abs(s0) / abs(s1);
 
                         // Invert result if signs don't match
-                        if is_pos(s0) ^ is_pos(s1) {
+                        if is_neg(s0) ^ is_neg(s1) {
                             invert(divisor)
                         } else {
                             divisor
