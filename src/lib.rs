@@ -4,6 +4,7 @@ extern crate digest;
 extern crate nibble;
 extern crate num;
 extern crate sha3;
+extern crate data_encoding;
 
 mod trie;
 
@@ -43,7 +44,7 @@ impl Stack {
     }
 
     fn pop(&mut self, times: usize) {
-        for i in 0..times {
+        for _i in 0..times {
             self.0.pop();
         }
     }
@@ -101,7 +102,7 @@ impl FrameState {
         let mut bytes: [u8; 32] = [0; 32];
         word.to_big_endian(&mut bytes);
 
-        for i in self.memory.len() .. loc + 32 {
+        for _i in self.memory.len() .. loc + 32 {
             self.memory.push(0);
         }
 
@@ -112,7 +113,7 @@ impl FrameState {
     }
 
     pub fn m_store8(&mut self, loc: usize, byte: u8) {
-        for i in self.memory.len() .. loc + 1 {
+        for _i in self.memory.len() .. loc + 1 {
             self.memory.push(0);
         }
 

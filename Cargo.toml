@@ -11,3 +11,4 @@ bigint = "4.2.0"
 sha3 = "0.7.2"
 nibble = { git = "https://github.com/joelburget/nibble" }
 digest = "0.7"
+data-encoding = "2.1.0"
