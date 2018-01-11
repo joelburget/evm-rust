@@ -1,12 +1,12 @@
 extern crate bigint;
 extern crate core;
 extern crate digest;
-extern crate nibble;
+extern crate nibble_vec;
 extern crate num;
 extern crate sha3;
 extern crate data_encoding;
 
-mod trie;
+pub mod trie;
 
 use core::clone::Clone;
 use core::ops::{Add,BitAnd,BitOr,BitXor,Index,IndexMut,Mul,Not,Sub};

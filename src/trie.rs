@@ -7,16 +7,23 @@ macro_rules! no_children {
     ])
 }
 
+macro_rules! todo_case {
+    () => (Branch {
+        children: no_children![],
+        data: None,
+    })
+}
+
 pub mod trie {
     use bigint::uint::U256;
-    use nibble::{NibVec, NibSliceExt, u4lo, u4, get_nib};
-    use nibble::common::get_nib;
+    use nibble_vec::NibbleVec;
     use num::traits::WrappingAdd;
-    use num::{One,FromPrimitive};
+    use num::{FromPrimitive};
     use sha3::{Digest, Keccak256};
     use self::TrieNode::*;
     use core::cmp::min;
-
+    use core::ops::Deref;
+    use data_encoding::HEXLOWER;
 
     #[derive(Debug, Clone)]
     pub enum TrieNode {
@@ -26,8 +33,8 @@ pub mod trie {
         ///   - hex-prefix encoding is used with the second parameter *true*
         /// * data at the leaf
         Leaf {
-            nibbles: NibVec,
-            data: NibVec,
+            nibbles: NibbleVec,
+            data: NibbleVec,
         },
         /// A two-item structure:
         /// * a series of nibbles of size greater than one that are shared by at least two distinct
@@ -35,8 +42,8 @@ pub mod trie {
         ///   - hex-prefix encoding is used with the second parameter *false*
         /// * data at the extension
         Extension {
-            nibbles: NibVec,
-            data: NibVec,
+            nibbles: NibbleVec,
+            subtree: Box<TrieNode>,
         },
         /// A 17-item structure whose first sixteen items correspond to each of the sixteen
         /// possible nibble values for the keys at this point in their traversal. The 17th item is
@@ -44,79 +51,136 @@ pub mod trie {
         /// point in its traversal.
         Branch {
             children: [Option<Box<TrieNode>>; 16],
-            data: Option<NibVec>,
+            data: Option<NibbleVec>,
         },
     }
 
+    fn find_prefix(p1: &NibbleVec, p2: &NibbleVec) -> (NibbleVec, NibbleVec, NibbleVec) {
+        // find common prefix
+        let iter_count = min(p1.len(), p2.len());
+        let mut prefix_len: usize = 0;
+
+        for i in 0..iter_count {
+            if p1.get(i) != p2.get(i) {
+                break;
+            }
+            prefix_len += 1;
+        }
+
+        (
+          slice(&p1, 0, prefix_len),
+          slice(&p1, prefix_len, p1.len()),
+          slice(&p2, prefix_len, p2.len()),
+        )
+    }
+
     impl TrieNode {
-        pub fn update(self, path: NibVec, value: NibVec) -> TrieNode {
-            match self {
-                Leaf { nibbles, data } => {
-                    // find common prefix
-                    let cur_slice = nibbles.as_slice();
-                    let new_slice = path.as_slice();
-                    let iter_count = min(nibbles.len(), path.len());
-                    let mut prefix_len: usize = 0;
+        pub fn update(&mut self, path: NibbleVec, value: NibbleVec) {
+            *self = match *self {
+                Leaf { ref nibbles, ref data } => {
+                    let (prefix, old_extra, new_extra) = find_prefix(nibbles, &path);
 
-                    for i in 0..iter_count {
-                        if cur_slice.get(i).to_lo() != new_slice.get(i).to_lo() {
-                            break;
-                        }
-                        prefix_len += 1;
-                    }
-
-                    println!("prefix_len: {}, nibbles.len(): {}, path.len(): {}", prefix_len, nibbles.len(), path.len());
-                    let prefix = nibbles.slice(0, prefix_len);
-                    let cur_extra = nibbles.slice(prefix_len, nibbles.len());
-                    let new_extra = path.slice(prefix_len, path.len());
-
-                    println!("prefix: {:?}, cur_extra: {:?}, new_extra: {:?}", prefix, cur_extra, new_extra);
-                    println!("prefix_len: {}", prefix_len);
-                    if cur_extra.len() == 0 && new_extra.len() == 0 {
+                    println!("prefix: {:?}, old_extra: {:?}, new_extra: {:?}", prefix, old_extra, new_extra);
+                    if old_extra.len() == 0 && new_extra.len() == 0 {
                         println!("keys were the same");
-                        // TODO: handle inner case:
-                        // if not is_inner:
-                        println!("not an extension node");
-                        return Leaf {
+                        Leaf {
                             nibbles: prefix,
                             data: value,
-                        };
-                    } else if cur_extra.len() == 0 {
-                        println!("old key exhausted");
-                        // TODO: if is_inner:
-                        println!("new branch");
-                        let children = no_children![];
+                        }
+                    } else if old_extra.len() == 0 {
+                        println!("old key exhausted; new branch");
+                        let mut children = no_children![];
                         let (hd, tl) = nibble_head_tail(new_extra);
-                        children[hd.to_lo() as usize].update(tl, value);
-                        return Branch {
-                            children: children,
-                            data: Some(data),
+                        match children[hd as usize] {
+                            None => {
+                                children[hd as usize] = Some(Box::new(Leaf {
+                                    nibbles: tl,
+                                    data: value,
+                                }));
+                            },
+                            Some(ref mut child) => {
+                                child.update(tl, value);
+                            },
                         };
+                        Branch {
+                            children,
+                            data: Some(data.clone()), // TODO: don't clone
+                        }
                     } else {
-                        println!("making a branch");
-                        let children = no_children![];
-                        // TODO: key done and is inner println!("making a branch");
-                        println!("key done or not inner");
-                        // println!("node: {}, key: {}, value: {}");
-                        let (hd, tl) = nibble_head_tail();
-                        children[hd].update(tl, value);
+                        println!("making a branch; key done");
+                        let mut children = no_children![];
+                        let (hd, tl) = nibble_head_tail(old_extra);
+                        match children[hd as usize] {
+                            None => {
+                                children[hd as usize] = Some(Box::new(Leaf {
+                                    nibbles: tl,
+                                    data: value,
+                                }));
+                            },
+                            Some(ref mut child) => {
+                                child.update(tl, value);
+                            }
+                        }
+                        Branch {
+                            children: children,
+                            data: Some(data.clone()), // TODO: don't clone
+                        }
                     }
                 },
-                Extension { nibbles, data } => {
-                    println!("extension");
-                    Branch {
-                        children: no_children![], // XXX
-                        data: None,
+
+                Extension { ref nibbles, ref subtree } => {
+                    let (prefix, old_extra, new_extra) = find_prefix(nibbles, &path);
+                    println!("updating extension");
+                    if old_extra.len() == 0 {
+                        println!("new key longer than old extension");
+                        // insert old subtree and new data as a branch
+                        let mut subtree = subtree.clone(); // TODO: don't clone
+                        subtree.update(new_extra, value);
+                        Extension {
+                            nibbles: nibbles.clone(),
+                            subtree: subtree,
+                        }
+                    } else {
+                        // the new key we're inserting bottoms out here
+                        let mut children = no_children![];
+                        let (hd, tl) = nibble_head_tail(old_extra);
+                        // TODO: logic to decide about extension, etc
+                        /*
+                        match children[hd as usize] {
+                            None => {
+                                children[hd as usize] = Some(Box::new(Leaf
+                            }
+                        }
+                        */
+                        Branch {
+                            children,
+                            data: Some(value),
+                        }
                     }
                 },
-                Branch { children, data } => {
+
+                Branch { ref children, ref data } => {
                     println!("branch");
+                    let mut children = children.clone();
+                    // TODO: case path is empty
+                    let (hd, tl) = nibble_head_tail(path);
+                    match children[hd as usize] {
+                        None => {
+                            children[hd as usize] = Some(Box::new(Leaf {
+                                nibbles: tl,
+                                data: value,
+                            }));
+                        },
+                        Some(ref mut child) => {
+                            child.update(tl, value);
+                        },
+                    }
                     Branch {
-                        children: no_children![], // XXX
-                        data: None,
+                        children,
+                        data: data.clone(),
                     }
                 },
-            }
+            };
         }
     }
 
@@ -124,36 +188,42 @@ pub mod trie {
         fn rlp(&self) -> Vec<u8> {
             match *self {
                 &Leaf { ref nibbles, ref data } => {
-                    println!("{:?} -> {:?}", nibbles, data);
-                    // let nibbles = nibbles.to_byte_vec();
-                    let data    = data.to_byte_vec();
                     println!(
                         "{:?} -> {:?}",
-                        ::data_encoding::HEXLOWER.encode(nibbles.to_byte_vec().as_slice()),
-                        ::data_encoding::HEXLOWER.encode(data.as_slice()));
-                    // let mut result = NibVec::new();
-                    // result.append(nibbles.rlp());
-                    // result.append(data.rlp());
-                    let result = vec![hex_prefix_encode_nibbles(nibbles, true), data];
-                    // let bytes = hex_prefix_encode_nibbles(&result, true);
-                    result.rlp()
+                        HEXLOWER.encode(nibbles.as_bytes()),
+                        HEXLOWER.encode(data.as_bytes()),
+                    );
+
+                    vec![
+                        hex_prefix_encode_nibbles(nibbles, true),
+                        data.clone().into_bytes(),
+                    ].rlp()
                 },
-                &Extension { ref nibbles, ref data } => {
-                    let encoded = hex_prefix_encode_nibbles(data, false);
-                    // let node_composition =
-                    // encoded.extend(
-                    encoded.rlp()
+                &Extension { ref nibbles, ref subtree } => {
+                    vec![
+                        hex_prefix_encode_nibbles(nibbles, false),
+                        subtree.deref().rlp(),
+                    ].rlp()
                 },
                 &Branch { ref children, ref data } => {
-                    Vec::new()
+                    let mut v = children
+                      .to_vec()
+                      .iter()
+                      .map(|x| match *x {
+                          None => Vec::new(),
+                          Some(ref data) => data.deref().rlp(),
+                      })
+                      .collect::<Vec<Vec<u8>>>();
 
-                    // let mut vec = Vec::new();
-                    // vec.extend(children.iter().cloned()); // TODO: map rlp
-                    // vec.rlp() // , data)
+                    match *data {
+                        None => {}
+                        Some(ref data) => {
+                          // TODO: this hex_prefix_encode_nibbles is not right
+                          v.push(hex_prefix_encode_nibbles(data, true));
+                        }
+                    }
 
-                    // let v = match data {
-                    //     None =>
-                    // }
+                    v.concat().rlp()
                 },
             }
         }
@@ -216,8 +286,8 @@ pub mod trie {
                     .concat();
                 let len = bytes.len();
                 println!("num children: {}", children.len());
-                println!("children[0]: {:?}", ::data_encoding::HEXLOWER.encode(&children[0].rlp()));
-                println!("concat output: {:?}", ::data_encoding::HEXLOWER.encode(&bytes));
+                println!("children[0]: {:?}", HEXLOWER.encode(&children[0].rlp()));
+                println!("concat output: {:?}", HEXLOWER.encode(&bytes));
                 println!("concat encoded length: {}", bytes.len());
                 let mut prefix: Vec<u8>;
                 if len < 56 {
@@ -243,55 +313,68 @@ pub mod trie {
             }
     }
 
-    fn nibble_head_tail(nibbles: NibVec) -> (u4lo, NibVec) {
-        (get_nib::<u4lo>(nibbles, 0), nibbles.slice(1, nibbles.len()))
+    fn nibble_head_tail(mut nibbles: NibbleVec) -> (u8, NibbleVec) {
+        let tl = nibbles.split(1);
+        (nibbles.get(0), tl)
+    }
+
+    fn slice(nibbles: &NibbleVec, start: usize, end: usize) -> NibbleVec {
+        // |----|---------|-----|
+        let mut clone = nibbles.clone();
+
+        // |----|---------|
+        clone.split(end);
+
+        //      |---------|
+        let ret = clone.split(start);
+        ret
     }
 
     // HP
-    fn hex_prefix_encode_nibbles(nibbles: &NibVec, t: bool) -> Vec<u8> {
+    fn hex_prefix_encode_nibbles(nibbles: &NibbleVec, t: bool) -> Vec<u8> {
         let len = nibbles.len();
-        let f = u4lo::from_usize(if t { 2 } else { 0 })
+        let f = u8::from_usize(if t { 2 } else { 0 })
             .expect("a 0 or a 2 couldn't fit into 4 bits!");
-        let prefix: u4lo;
+        let prefix: u8;
         if len % 2 == 0 {
             prefix = f;
         } else {
-            prefix = f.wrapping_add(&u4lo::one());
+            prefix = f.wrapping_add(1);
         }
         let mut nibbles2 = nibbles.clone();
 
         // if even, insert extra nibble
-        if len & 1 == 0 { nibbles2.insert(0, u4lo::from_lo(0)); }
+        if len & 1 == 0 { nibbles2.push(0); }
 
-        nibbles2.insert(0, prefix);
-        nibbles2.to_byte_vec()
+        nibbles2.push(prefix);
+        nibbles2.into_bytes()
     }
 
     impl Trie {
         pub fn new() -> Trie {
             // TODO: can we move this to a constant?
             let emptyNode: TrieNode = Leaf {
-                nibbles: NibVec::new(),
-                data: NibVec::new(),
+                nibbles: NibbleVec::new(),
+                data: NibbleVec::new(),
             };
 
             return Trie { node: emptyNode };
         }
 
-        pub fn insert(&mut self, path: NibVec, value: NibVec) {
+        pub fn insert(&mut self, path: NibbleVec, value: NibbleVec) {
             let mut new_node = self.node.clone();
-            new_node = new_node.update(path, value);
+            new_node.update(path, value);
             println!("new node: {:?}", new_node);
             self.node = new_node;
         }
 
-        pub fn lookup(&self, path: NibVec) -> Option<Vec<u8>> {
+        pub fn lookup(&self, path: NibbleVec) -> Option<Vec<u8>> {
             return None
         }
 
         pub fn hash(&self) -> U256 {
             let mut hasher = Keccak256::default();
-            println!("hash input: {:?}", ::data_encoding::HEXLOWER.encode(self.rlp_node().as_slice()));
+            println!("hash input: {:?}", HEXLOWER.encode(self.rlp_node().as_slice()));
             hasher.input(self.rlp_node().as_slice());
             let out: &[u8] = &hasher.result();
             U256::from(out)
@@ -304,28 +387,29 @@ pub mod trie {
         pub fn hex_root(&self) -> String {
             let mut buf = [0; 32];
             self.hash().to_big_endian(&mut buf);
-            return ::data_encoding::HEXLOWER.encode(&buf);
+            return HEXLOWER.encode(&buf);
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use nibble::NibVec;
+    use nibble_vec::NibbleVec;
     use trie::trie::{Trie,Rlp};
+    use data_encoding::HEXLOWER;
 
     #[test]
     fn insertion() {
         let t = &mut Trie::new();
-        // t.insert(NibVec::new(), vec![1,2,3]);
+        // t.insert(NibbleVec::new(), vec![1,2,3]);
     }
 
     #[test]
     fn matches_blog() {
         let t = &mut Trie::new();
         // six nibble key
-        let k = NibVec::from_str("010102").unwrap();
-        let v = NibVec::from_byte_vec(vec![Vec::from("hello".as_bytes())].rlp());
+        let k = NibbleVec::from_byte_vec(HEXLOWER.decode(b"010102").unwrap());
+        let v = NibbleVec::from_byte_vec(vec![Vec::from("hello".as_bytes())].rlp());
 
         // println!("rlp encoded [\"hello\"]: {:x}", v);
         // println!("{:x} -> {:x}", k, v);
@@ -333,8 +417,8 @@ mod tests {
         t.insert(k, v);
         assert_eq!(t.hex_root(), "15da97c42b7ed2e1c0c8dab6a6d7e3d9dc0a75580bbc4f1f29c33996d1415dcc");
 
-        let k = NibVec::from_str("010102").unwrap();
-        let v = NibVec::from_byte_vec(vec![Vec::from("hellothere".as_bytes())].rlp());
+        let k = NibbleVec::from_byte_vec(HEXLOWER.decode(b"010102").unwrap());
+        let v = NibbleVec::from_byte_vec(vec![Vec::from("hellothere".as_bytes())].rlp());
         t.insert(k, v);
 
         assert_eq!(t.hex_root(), "05e13d8be09601998499c89846ec5f3101a1ca09373a5f0b74021261af85d396");
