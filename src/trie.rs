@@ -7,13 +7,6 @@ macro_rules! no_children {
     ])
 }
 
-macro_rules! todo_case {
-    () => (Branch {
-        children: no_children![],
-        data: None,
-    })
-}
-
 pub mod trie {
     use bigint::uint::U256;
     use nibble_vec::NibbleVec;
@@ -76,17 +69,19 @@ pub mod trie {
 
     impl TrieNode {
         pub fn update(&mut self, path: NibbleVec, value: NibbleVec) {
-            *self = match *self {
-                Leaf { ref nibbles, ref data } => {
+            let mut result: Option<TrieNode> = None;
+            match self {
+                &mut Leaf { ref mut nibbles, ref mut data } => {
                     let (prefix, old_extra, new_extra) = find_prefix(nibbles, &path);
 
-                    println!("prefix: {:?}, old_extra: {:?}, new_extra: {:?}", prefix, old_extra, new_extra);
+                    println!("prefix: {:?}, old_extra: {:?}, new_extra: {:?}",
+                             prefix, old_extra, new_extra);
                     if old_extra.len() == 0 && new_extra.len() == 0 {
                         println!("keys were the same");
-                        Leaf {
+                        result = Some(Leaf {
                             nibbles: prefix,
                             data: value,
-                        }
+                        });
                     } else if old_extra.len() == 0 {
                         println!("old key exhausted; new branch");
                         let mut children = no_children![];
@@ -102,10 +97,10 @@ pub mod trie {
                                 child.update(tl, value);
                             },
                         };
-                        Branch {
+                        result = Some(Branch {
                             children,
                             data: Some(data.clone()), // TODO: don't clone
-                        }
+                        });
                     } else {
                         println!("making a branch; key done");
                         let mut children = no_children![];
@@ -121,14 +116,14 @@ pub mod trie {
                                 child.update(tl, value);
                             }
                         }
-                        Branch {
+                        result = Some(Branch {
                             children: children,
                             data: Some(data.clone()), // TODO: don't clone
-                        }
+                        });
                     }
                 },
 
-                Extension { ref nibbles, ref subtree } => {
+                &mut Extension { ref mut nibbles, ref mut subtree } => {
                     let (prefix, old_extra, new_extra) = find_prefix(nibbles, &path);
                     println!("updating extension");
                     if old_extra.len() == 0 {
@@ -136,10 +131,10 @@ pub mod trie {
                         // insert old subtree and new data as a branch
                         let mut subtree = subtree.clone(); // TODO: don't clone
                         subtree.update(new_extra, value);
-                        Extension {
+                        result = Some(Extension {
                             nibbles: nibbles.clone(),
                             subtree: subtree,
-                        }
+                        });
                     } else {
                         // the new key we're inserting bottoms out here
                         let mut children = no_children![];
@@ -152,14 +147,14 @@ pub mod trie {
                             }
                         }
                         */
-                        Branch {
+                        result = Some(Branch {
                             children,
                             data: Some(value),
-                        }
+                        });
                     }
                 },
 
-                Branch { ref children, ref data } => {
+                &mut Branch { ref mut children, ref mut data } => {
                     println!("branch");
                     let mut children = children.clone();
                     // TODO: case path is empty
@@ -175,12 +170,17 @@ pub mod trie {
                             child.update(tl, value);
                         },
                     }
-                    Branch {
+                    result = Some(Branch {
                         children,
                         data: data.clone(),
-                    }
+                    });
                 },
             };
+
+            match result {
+                None => {},
+                Some(result) => { *self = result; },
+            }
         }
     }
 
@@ -232,6 +232,7 @@ pub mod trie {
     #[derive(Clone)]
     pub struct Trie {
         node: TrieNode,
+        is_empty: bool,
     }
 
     pub trait Rlp {
@@ -285,10 +286,12 @@ pub mod trie {
                     .collect::<Vec<Vec<u8>>>()
                     .concat();
                 let len = bytes.len();
+
                 println!("num children: {}", children.len());
                 println!("children[0]: {:?}", HEXLOWER.encode(&children[0].rlp()));
                 println!("concat output: {:?}", HEXLOWER.encode(&bytes));
                 println!("concat encoded length: {}", bytes.len());
+
                 let mut prefix: Vec<u8>;
                 if len < 56 {
                     let len8 = len as u8;
@@ -358,14 +361,20 @@ pub mod trie {
                 data: NibbleVec::new(),
             };
 
-            return Trie { node: emptyNode };
+            return Trie { node: emptyNode, is_empty: true };
         }
 
         pub fn insert(&mut self, path: NibbleVec, value: NibbleVec) {
-            let mut new_node = self.node.clone();
-            new_node.update(path, value);
-            println!("new node: {:?}", new_node);
-            self.node = new_node;
+            if self.is_empty {
+                self.node = Leaf {
+                    nibbles: path,
+                    data: value,
+                };
+                self.is_empty = false;
+            } else {
+                self.node.update(path, value);
+            }
+            println!("new node: {:?}", self.node);
         }
 
         pub fn lookup(&self, path: NibbleVec) -> Option<Vec<u8>> {
@@ -408,16 +417,20 @@ mod tests {
     fn matches_blog() {
         let t = &mut Trie::new();
         // six nibble key
-        let k = NibbleVec::from_byte_vec(HEXLOWER.decode(b"010102").unwrap());
+        let k = NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02']);
         let v = NibbleVec::from_byte_vec(vec![Vec::from("hello".as_bytes())].rlp());
 
         // println!("rlp encoded [\"hello\"]: {:x}", v);
         // println!("{:x} -> {:x}", k, v);
 
+        // >>> state.root_node
+        // [' \x01\x01\x02', '\xc6\x85hello']
+        // >>> rlp.encode(state.root_node)
+        // '\xcd\x84 \x01\x01\x02\x87\xc6\x85hello'
         t.insert(k, v);
         assert_eq!(t.hex_root(), "15da97c42b7ed2e1c0c8dab6a6d7e3d9dc0a75580bbc4f1f29c33996d1415dcc");
 
-        let k = NibbleVec::from_byte_vec(HEXLOWER.decode(b"010102").unwrap());
+        let k = NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02']);
         let v = NibbleVec::from_byte_vec(vec![Vec::from("hellothere".as_bytes())].rlp());
         t.insert(k, v);
 
