@@ -13,7 +13,7 @@ use core::ops::{Add,BitAnd,BitOr,BitXor,Index,IndexMut,Mul,Not,Sub};
 use std::cmp::max;
 use bigint::uint::U256;
 use num::BigUint;
-// use sha3::{Digest, Keccak256};
+use std::convert::From;
 
 const homestead: u32 = 1150000;
 
@@ -29,6 +29,40 @@ pub struct Address([u8; 20]);
 pub enum VMResult {
     VmFailure,
     VmSuccess,
+}
+
+#[derive(Clone)]
+pub struct S256(U256);
+
+
+// Basic version of signed semantics. Kind of gross because
+// most two's complement arithmetic is the same for signed/unsigned
+// so seems unnecessary to implement every op for S256. But on the other
+// hand also annoying to keep wrapping/unwrapping.
+impl S256 {
+
+    fn to_u256(&self) -> U256 {
+        self.0
+    }
+    
+    fn abs(&self) -> U256 {
+        let num = self.0;
+        if num.bit(255) {
+            !num + U256::one()
+        } else {
+            num
+        }
+    }
+
+    fn invert(&self) -> S256 {
+        let num = self.0;
+        S256(!num + U256::one())
+    }
+    
+    fn sign(&self) -> bool {
+        self.0.bit(255)
+    }
+
 }
 
 #[derive(PartialEq, Clone)]
@@ -47,6 +81,14 @@ impl Stack {
         for _i in 0..times {
             self.0.pop();
         }
+    }
+
+    fn apply_ternary_op<F>(&mut self, op: F)
+    where F: Fn(U256, U256, U256) -> U256,
+    {
+        let result = op(self[0], self[1], self[2]);
+        self.pop(3);
+        self.push(result);
     }
 
     fn apply_binary_op<F>(&mut self, op: F)
@@ -465,54 +507,111 @@ impl VM {
                 }
             ),
 
-            // TODO: we should probably add a "newtype wrapper" for U256 for
-            // signed semantics
-
-            // Truncated signed integer division
-            SDIV => state.stack.apply_binary_op(|s0, s1|
-                if s1.is_zero() {
-                    U256::zero()
-                } else {
-                    let min_value = (U256::one() << 255) - U256::one();
-                    let negative_one = !U256::zero();
-
-                    if s0 == min_value && s1 == negative_one {
-                        // Fixed point:
-                        min_value
-                    } else {
-                        let is_neg = |U256(u64s): U256| u64s[3].leading_zeros() == 0;
-                        let invert = |x: U256| x^negative_one + U256::one();
-                        let abs = |x: U256| if is_neg(x) { invert(x) } else { x };
-
-                        // Do the division on the positive numbers
-                        let divisor = abs(s0) / abs(s1);
-
-                        // Invert result if signs don't match
-                        if is_neg(s0) ^ is_neg(s1) {
-                            invert(divisor)
-                        } else {
-                            divisor
-                        }
-                    }
-                }
+            SDIV => state.stack.apply_binary_op(|s0,s1|
+                 if s1.is_zero() {
+                     U256::zero()
+                 } else {
+                     let min_value = (U256::one() << 255) - U256::one();
+                     let negative_one = !U256::zero();
+                     
+                     if s0 == min_value && s1 == negative_one {
+                         min_value
+                     } else {
+                         let divisor = S256(S256(s0).abs() / S256(s1).abs());
+                         
+                         if S256(s0).sign() != S256(s1).sign() {
+                             divisor.invert().to_u256()
+                         } else {
+                             divisor.to_u256()
+                         }
+                     }
+                 }
             ),
 
-            MOD        => panic!("unimplemented: MOD"),
-            SMOD       => panic!("unimplemented: SMOD"),
-            ADDMOD     => panic!("unimplemented: ADDMOD"),
-            MULMOD     => panic!("unimplemented: MULMOD"),
-            EXP        => panic!("unimplemented: EXP"),
-            SIGNEXTEND => panic!("unimplemented: SIGNEXTEND"),
+            MOD        => state.stack.apply_binary_op(|s0, s1|
+                       if s1.is_zero() {
+                           U256::zero()
+                       } else {
+                           s0 % s1
+                       }
+            ),
+            
+            SMOD       => state.stack.apply_binary_op(|s0,s1|
+                       if s1.is_zero() {
+                           U256::zero()
+                       } else {
+                           let res = S256(s0).abs() % S256(s1).abs();
+                           if S256(s0).sign() {
+                               let res = !res + U256::one();
+                           }
+                           res
+                       }
+            ),      
+
+            // Intermediate calculations not subject to 2^256 modulo
+            ADDMOD     => state.stack.apply_ternary_op(|s0, s1, s2|
+                       if s2.is_zero() {
+                           U256::zero()
+                       } else {
+                           
+                           (s0 + s1) % s2
+                       }
+            ),
+
+            // Again, intermediates not subject to 2^256 mod
+            MULMOD     => state.stack.apply_ternary_op(|s0, s1, s2|
+                       if s2.is_zero() {
+                           U256::zero()
+                       } else {
+                           (s0 * s1) % s2
+                       }
+            ),
+
+            //Overflowing pow returns (result,overflow_bool)
+            EXP        => state.stack.apply_binary_op(|s0, s1| {s0.overflowing_pow(s1).0}),
+
+            SIGNEXTEND => state.stack.apply_binary_op(|s0, s1|
+                       if s0 < From::from(31) {
+                           let bit   = (s0.low_u64() * 8 + 7) as usize;
+                           let mask  = (U256::one() << bit) - U256::one();
+                           if s1.bit(bit) {
+                               s1 | !mask
+                           } else {
+                               s1 & mask
+                           }
+                       } else {
+                           s0
+                       }
+            ),    
+                                                          
 
             LT => state.stack.apply_binary_op(|x, y| bool_to_u256(x < y)),
 
             GT => state.stack.apply_binary_op(|x, y| bool_to_u256(x > y)),
 
-            // XXX make signed
-            SLT => state.stack.apply_binary_op(|x, y| bool_to_u256(x < y)),
+            SLT => state.stack.apply_binary_op(|x, y|
+                {
+                    let res = match (S256(x).sign(),S256(y).sign()) {
+                        (false,false) => x < y,
+                        (false,true)  => false,
+                        (true,false)  => true,
+                        (true,true)   => S256(x).abs() >= S256(y).abs(),
+                    };
+                    bool_to_u256(res)
+                }
+            ),
 
-            // XXX make signed
-            SGT => state.stack.apply_binary_op(|x, y| bool_to_u256(x < y)),
+            SGT => state.stack.apply_binary_op(|x, y|
+                {
+                    let res = match (S256(x).sign(),S256(y).sign()) {
+                        (false,false) => x > y,
+                        (false,true)  => true,
+                        (true,false)  => false,
+                        (true,true)   => S256(x).abs() <= S256(y).abs(),
+                    };
+                    bool_to_u256(res)
+                }
+            ),
 
             EQ => state.stack.apply_binary_op(|x, y| bool_to_u256(x == y)),
 
@@ -534,20 +633,20 @@ impl VM {
                 stk.push(U256::from_big_endian(&[source.byte(ix)]));
             },
 
-//             SHA3 => {
-//                 let mut hasher = Keccak256::default();
-//                 let     stt = self.state.borrow_mut();
-//                 let mut stk = stt.stack.borrow_mut();
-//                 let start = stk[0];
-//                 let end   = stk[1];
-//                 let message = self.get_memory(start, end);
-//                 hasher.input(message);
-//                 let out = hasher.result();
+//            SHA3 => {
+//                let mut hasher = Keccak256::default();
+//                let     stt = self.state.borrow_mut();
+//                let mut stk = stt.stack.borrow_mut();
+//                let start = stk[0];
+//                let end   = stk[1];
+//                let message = self.get_memory(start, end);
+//                hasher.input(message);
+//                let out = hasher.result();
 
-//                 stk.pop(2);
-//                 stk.push(out);
-//                 stt.active_words = memory_expansion(stt.active_words, start, end);
-//             }
+//                stk.pop(2);
+//                stk.push(out);
+//                stt.active_words = memory_expansion(stt.active_words, start, end);
+//            }
 
             ADDRESS => state.stack.push(addr_to_u256(&self.env.owner)),
 
