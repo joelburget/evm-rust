@@ -248,26 +248,27 @@ pub mod trie {
                         data.clone().into_bytes().rlp(),
                     ].rlp()
                 },
+
                 &Extension { ref nibbles, ref subtree } => {
                     let mut hasher = Keccak256::default();
                     hasher.input(subtree.deref().rlp().to_vec().as_slice());
                     let subtree_hash: &[u8] = &hasher.result();
+                    println!("- extension subtree: {:?}\n- hash: {:?}", subtree, HEXLOWER.encode(subtree_hash));
 
                     vec![
                         hex_prefix_encode_nibbles(nibbles, false),
                         Vec::from(subtree_hash).rlp(),
                     ].rlp()
                 },
+
                 &Branch { ref children, ref data } => {
                     let mut v: Vec<RlpEncoded> = Vec::new();
 
-                    for (index, x) in children.to_vec().iter().enumerate() {
+                    for x in children.to_vec().iter() {
                         match *x {
                           None => { v.push(RlpEncoded(vec![0x80])); },
                           Some(ref data) => {
-                              let it = data.deref().rlp();
-                              // println!("it: {:?}", it);
-                              v.push(it);
+                              v.push(data.deref().rlp());
                           },
                         }
                     }
@@ -276,8 +277,7 @@ pub mod trie {
                     match *data {
                         None => { v.push(RlpEncoded(vec![0x80])); },
                         Some(ref data) => {
-                          // TODO: this hex_prefix_encode_nibbles is not right
-                          v.push(hex_prefix_encode_nibbles(data, true));
+                          v.push(data.clone().into_bytes().rlp());
                         }
                     }
 
@@ -350,16 +350,16 @@ pub mod trie {
                     .concat();
                 let len = bytes.len();
 
-                println!("num children: {}", self.len());
-                println!("children[0]: {:?}", HEXLOWER.encode(&self[0].rlp().to_vec()));
-                println!("concat output: {:?}", HEXLOWER.encode(&bytes));
-                println!("concat encoded length: {}", bytes.len());
+                // println!("num children: {}", self.len());
+                // println!("children[0]: {:?}", HEXLOWER.encode(&self[0].rlp().to_vec()));
+                // println!("concat output: {:?}", HEXLOWER.encode(&bytes));
+                // println!("concat encoded length: {}", bytes.len());
 
                 let mut prefix: Vec<u8>;
                 if len < 56 {
                     let len8 = len as u8;
                     prefix = vec![192 + len8];
-                    println!("small length list ({}). using prefix {:?}", len, prefix);
+                    // println!("small length list ({}). using prefix {:?}", len, HEXLOWER.encode(&prefix));
                 } else {
                     let mut be_buf: [u8; 64] = [0; 64]; // TODO: big enough?
 
