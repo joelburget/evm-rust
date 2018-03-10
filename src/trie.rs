@@ -133,73 +133,20 @@ pub mod trie {
                             nibbles: prefix,
                             data: value,
                         });
-                    } else if old_extra.len() == 0 {
-                        let mut children = no_children![];
-                        let (hd, tl) = nibble_head_tail(new_extra);
-                        match children[hd as usize] {
-                            None => {
-                                children[hd as usize] = Some(Box::new(Leaf {
-                                    nibbles: tl,
-                                    data: value,
-                                }));
-                            },
-                            Some(ref mut child) => {
-                                child.update(tl, value);
-                            },
+
+                    } else {
+                        // otherwise we create an extension with prefix pointing to a branch
+                        let mut branch = Branch {
+                            children: no_children![],
+                            data: None,
                         };
+                        branch.update(old_extra, data.clone());
+                        branch.update(new_extra, value);
+
                         result = Some(Extension {
                             nibbles: prefix,
-                            subtree: Box::new(Branch {
-                                children,
-                                data: Some(data.clone()), // TODO: don't clone
-                            })
+                            subtree: Box::new(branch),
                         });
-                    } else {
-                        // TODO this is ugly ugly ugly
-                        let mut children = no_children![];
-                        let (hd, tl) = nibble_head_tail(old_extra);
-                        match children[hd as usize] {
-                            None => {
-                                children[hd as usize] = Some(Box::new(Leaf {
-                                    nibbles: tl,
-                                    // TODO: don't clone
-                                    data: data.clone(),
-                                }));
-                            },
-                            Some(ref mut child) => {
-                                // TODO: don't clone
-                                child.update(tl, data.clone());
-                            }
-                        }
-                        if new_extra.len() > 0 {
-                            let (hd, tl) = nibble_head_tail(new_extra);
-                            match children[hd as usize] {
-                                None => {
-                                    children[hd as usize] = Some(Box::new(Leaf {
-                                        nibbles: tl,
-                                        data: value,
-                                    }));
-                                },
-                                Some(ref mut child) => {
-                                    child.update(tl, value);
-                                }
-                            }
-                            result = Some(Extension {
-                                nibbles: prefix,
-                                subtree: Box::new(Branch {
-                                    children,
-                                    data: None,
-                                })
-                            });
-                        } else {
-                            result = Some(Extension {
-                                nibbles: prefix,
-                                subtree: Box::new(Branch {
-                                    children,
-                                    data: Some(value),
-                                })
-                            });
-                        }
                     }
                 },
 
@@ -234,23 +181,30 @@ pub mod trie {
 
                 &mut Branch { ref mut children, ref mut data } => {
                     let mut children = children.clone();
-                    // TODO: case path is empty
-                    let (hd, tl) = nibble_head_tail(path);
-                    match children[hd as usize] {
-                        None => {
-                            children[hd as usize] = Some(Box::new(Leaf {
-                                nibbles: tl,
-                                data: value,
-                            }));
-                        },
-                        Some(ref mut child) => {
-                            child.update(tl, value);
-                        },
+                    if path.is_empty() {
+                        result = Some(Branch {
+                            children,
+                            data: Some(value),
+                        });
+                    } else {
+                        // TODO: case path is empty
+                        let (hd, tl) = nibble_head_tail(path);
+                        match children[hd as usize] {
+                            None => {
+                                children[hd as usize] = Some(Box::new(Leaf {
+                                    nibbles: tl,
+                                    data: value,
+                                }));
+                            },
+                            Some(ref mut child) => {
+                                child.update(tl, value);
+                            },
+                        }
+                        result = Some(Branch {
+                            children,
+                            data: data.clone(),
+                        });
                     }
-                    result = Some(Branch {
-                        children,
-                        data: data.clone(),
-                    });
                 },
             };
 
@@ -307,7 +261,7 @@ pub mod trie {
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     pub struct Trie {
         node: TrieNode,
         is_empty: bool,
@@ -543,6 +497,7 @@ mod tests {
         let k = hex_to_nibbles(b"0101");
         let v = vec_str_to_nibbles(vec!["hellothere"]);
         t2c.insert(k, v);
+        println!("{:?}", t2c);
         assert_eq!(t2c.hex_root(), "f3e46945b73ef862d59850a8e1a73ef736625dd9a02bed1c9f2cc3ff4cd798b3");
 
         println!("exercise 2d\n");
@@ -561,7 +516,7 @@ mod tests {
         let k = hex_to_nibbles(b"01010257");
         let v = vec_str_to_nibbles(vec!["jimbojones"]);
         t3.insert(k, v);
-//         assert_eq!(t3.hex_root(), "fcb2e3098029e816b04d99d7e1bba22d7b77336f9fe8604f2adfb04bcf04a727");
+        // assert_eq!(t3.hex_root(), "fcb2e3098029e816b04d99d7e1bba22d7b77336f9fe8604f2adfb04bcf04a727");
 
         println!("exercise 4\n");
 
