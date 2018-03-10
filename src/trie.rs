@@ -85,6 +85,17 @@ pub mod trie {
         )
     }
 
+    fn maybe_extend(prefix: NibbleVec, node: TrieNode) -> TrieNode {
+        if !prefix.is_empty() {
+            Extension {
+                nibbles: prefix,
+                subtree: Box::new(node),
+            }
+        } else {
+            node
+        }
+    }
+
     impl TrieNode {
         pub fn lookup(&self, path: NibbleVec) -> Option<Vec<u8>> {
             match self {
@@ -142,11 +153,7 @@ pub mod trie {
                         };
                         branch.update(old_extra, data.clone());
                         branch.update(new_extra, value);
-
-                        result = Some(Extension {
-                            nibbles: prefix,
-                            subtree: Box::new(branch),
-                        });
+                        result = Some(maybe_extend(prefix, branch))
                     }
                 },
 
@@ -154,28 +161,19 @@ pub mod trie {
                     let (prefix, old_extra, new_extra) = find_prefix(nibbles, &path);
                     if old_extra.len() == 0 {
                         // insert old subtree and new data as a branch
-                        let mut subtree = subtree.clone(); // TODO: don't clone
+                        let mut subtree = subtree.deref().clone(); // TODO: don't clone
                         subtree.update(new_extra, value);
-                        result = Some(Extension {
-                            nibbles: nibbles.clone(),
-                            subtree: subtree,
-                        });
+                        result = Some(maybe_extend(prefix, *subtree));
                     } else {
                         // the new key we're inserting bottoms out here
-                        let mut children = no_children![];
-                        let (hd, tl) = nibble_head_tail(old_extra);
-                        // TODO: logic to decide about extension, etc
-                        /*
-                        match children[hd as usize] {
-                            None => {
-                                children[hd as usize] = Some(Box::new(Leaf
-                            }
-                        }
-                        */
-                        result = Some(Branch {
-                            children,
-                            data: Some(value),
-                        });
+                        // TODO: this look suspiciously similar to above
+                        let mut branch = Branch {
+                            children: no_children![],
+                            data: None,
+                        };
+                        branch.update(old_extra, nibbles.clone());
+                        branch.update(new_extra, value);
+                        result = Some(maybe_extend(prefix, branch));
                     }
                 },
 
@@ -187,7 +185,6 @@ pub mod trie {
                             data: Some(value),
                         });
                     } else {
-                        // TODO: case path is empty
                         let (hd, tl) = nibble_head_tail(path);
                         match children[hd as usize] {
                             None => {
@@ -215,6 +212,19 @@ pub mod trie {
         }
     }
 
+    fn rlp_reference(node: &TrieNode) -> RlpEncoded {
+        match node {
+            &Leaf{..}      => node.rlp(),
+            &Extension{..} => node.rlp(),
+            &Branch{..}    => {
+                let mut hasher = Keccak256::default();
+                hasher.input(node.deref().rlp().to_vec().as_slice());
+                let subtree_hash: &[u8] = &hasher.result();
+                Vec::from(subtree_hash).rlp()
+            }
+        }
+    }
+
     impl <'a>Rlp for &'a TrieNode {
         fn rlp(&self) -> RlpEncoded {
             match *self {
@@ -226,34 +236,26 @@ pub mod trie {
                 },
 
                 &Extension { ref nibbles, ref subtree } => {
-                    let mut hasher = Keccak256::default();
-                    hasher.input(subtree.deref().rlp().to_vec().as_slice());
-                    let subtree_hash: &[u8] = &hasher.result();
-
                     vec![
                         hex_prefix_encode_nibbles(nibbles, false),
-                        Vec::from(subtree_hash).rlp(),
+                        rlp_reference(subtree)
                     ].rlp()
                 },
 
                 &Branch { ref children, ref data } => {
                     let mut v: Vec<RlpEncoded> = Vec::new();
 
-                    for x in children.to_vec().iter() {
-                        match *x {
-                          None => { v.push(RlpEncoded(vec![0x80])); },
-                          Some(ref data) => {
-                              v.push(data.deref().rlp());
-                          },
-                        }
+                    for child in children.to_vec().iter() {
+                        v.push(match *child {
+                          None           => RlpEncoded(vec![0x80]),
+                          Some(ref data) => rlp_reference(data),
+                        });
                     }
 
-                    match *data {
-                        None => { v.push(RlpEncoded(vec![0x80])); },
-                        Some(ref data) => {
-                          v.push(data.clone().into_bytes().rlp());
-                        }
-                    }
+                    v.push(match *data {
+                        None           => RlpEncoded(vec![0x80]),
+                        Some(ref data) => data.clone().into_bytes().rlp(),
+                    });
 
                     v.rlp()
                 },
@@ -457,17 +459,13 @@ mod tests {
     #[test]
     fn matches_blog() {
         let t = &mut Trie::new();
-        // six nibble key
-        let k = hex_to_nibbles(b"010102");
-        let v = vec_str_to_nibbles(vec!["hello"]);
 
         println!("exercise 1\n");
-
         // >>> state.root_node
         // [' \x01\x01\x02', '\xc6\x85hello']
         // >>> rlp.encode(state.root_node)
         // '\xcd\x84 \x01\x01\x02\x87\xc6\x85hello'
-        t.insert(k, v);
+        t.insert(hex_to_nibbles(b"010102"), vec_str_to_nibbles(vec!["hello"]));
         assert_eq!(t.hex_root(), "15da97c42b7ed2e1c0c8dab6a6d7e3d9dc0a75580bbc4f1f29c33996d1415dcc");
 
         // these tests use this as a starting point
@@ -477,46 +475,30 @@ mod tests {
         let mut t3  = t.clone();
 
         println!("exercise 2\n");
-
         // make an entry with the same key
-        let k = hex_to_nibbles(b"010102");
-        let v = vec_str_to_nibbles(vec!["hellothere"]);
-        t.insert(k, v);
+        t.insert(hex_to_nibbles(b"010102"), vec_str_to_nibbles(vec!["hellothere"]));
         assert_eq!(t.hex_root(), "05e13d8be09601998499c89846ec5f3101a1ca09373a5f0b74021261af85d396");
 
         println!("exercise 2b\n");
-
         // make an entry with almost the same key but a different final nibble
-        let k = hex_to_nibbles(b"010103");
-        let v = vec_str_to_nibbles(vec!["hellothere"]);
-        t2b.insert(k, v);
+        t2b.insert(hex_to_nibbles(b"010103"), vec_str_to_nibbles(vec!["hellothere"]));
         assert_eq!(t2b.hex_root(), "b5e187f15f1a250e51a78561e29ccfc0a7f48e06d19ce02f98dd61159e81f71d");
 
         println!("exercise 2c\n");
-
-        let k = hex_to_nibbles(b"0101");
-        let v = vec_str_to_nibbles(vec!["hellothere"]);
-        t2c.insert(k, v);
-        println!("{:?}", t2c);
+        t2c.insert(hex_to_nibbles(b"0101"), vec_str_to_nibbles(vec!["hellothere"]));
         assert_eq!(t2c.hex_root(), "f3e46945b73ef862d59850a8e1a73ef736625dd9a02bed1c9f2cc3ff4cd798b3");
 
         println!("exercise 2d\n");
-
-        let k = hex_to_nibbles(b"01010257");
-        let v = vec_str_to_nibbles(vec!["hellothere"]);
-        t2d.insert(k, v);
+        t2d.insert(hex_to_nibbles(b"01010257"), vec_str_to_nibbles(vec!["hellothere"]));
         assert_eq!(t2d.hex_root(), "dfd000b4b04811e7e59f1648f887bd56c16e4c047d6267793cf0eacf4b035c34");
 
         println!("exercise 3\n");
 
-        let k = hex_to_nibbles(b"01010255");
-        let v = vec_str_to_nibbles(vec!["hellothere"]);
-        t3.insert(k, v);
+        // t.insert(hex_to_nibbles(b"010102"), vec_str_to_nibbles(vec!["hello"]));
+        t3.insert(hex_to_nibbles(b"01010255"), vec_str_to_nibbles(vec!["hellothere"]));
         assert_eq!(t3.hex_root(), "17fe8af9c6e73de00ed5fd45d07e88b0c852da5dd4ee43870a26c39fc0ec6fb3");
-        let k = hex_to_nibbles(b"01010257");
-        let v = vec_str_to_nibbles(vec!["jimbojones"]);
-        t3.insert(k, v);
-        // assert_eq!(t3.hex_root(), "fcb2e3098029e816b04d99d7e1bba22d7b77336f9fe8604f2adfb04bcf04a727");
+        t3.insert(hex_to_nibbles(b"01010257"), vec_str_to_nibbles(vec!["jimbojones"]));
+        assert_eq!(t3.hex_root(), "fcb2e3098029e816b04d99d7e1bba22d7b77336f9fe8604f2adfb04bcf04a727");
 
         println!("exercise 4\n");
 
