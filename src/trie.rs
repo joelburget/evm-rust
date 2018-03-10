@@ -90,13 +90,8 @@ pub mod trie {
             match self {
                 &Leaf { ref nibbles, ref data } => {
                     if path != *nibbles {
-                        println!("lookup failing at leaf:\n-path: {:?}\n-nibbles: {:?}",
-                                 HEXLOWER.encode(path.as_bytes()),
-                                 HEXLOWER.encode((*nibbles).as_bytes())
-                                 );
                         None
                     } else {
-                        println!("lookup returning at leaf: {:?}", HEXLOWER.encode(data.clone().as_bytes()));
                         Some(data.clone().into_bytes())
                     }
                 }
@@ -107,12 +102,6 @@ pub mod trie {
                     // the path passed in should be at least as long as the extension nibbles.
                     // return None if not
                     if !nibbles_extra.is_empty() {
-                        println!("lookup failing at extension:\n-path: {:?}\n-prefix: {:?}\n-nibbles_extra: {:?}\n-path_extra: {:?}",
-                                 HEXLOWER.encode(path.as_bytes()),
-                                 HEXLOWER.encode(prefix.as_bytes()),
-                                 HEXLOWER.encode(nibbles_extra.as_bytes()),
-                                 HEXLOWER.encode(path_extra.as_bytes())
-                                 );
                         None
                     } else {
                         subtree.lookup(path_extra)
@@ -139,16 +128,12 @@ pub mod trie {
                 &mut Leaf { ref mut nibbles, ref mut data } => {
                     let (prefix, old_extra, new_extra) = find_prefix(nibbles, &path);
 
-                    println!("prefix: {:?}, old_extra: {:?}, new_extra: {:?}",
-                             prefix, old_extra, new_extra);
                     if old_extra.len() == 0 && new_extra.len() == 0 {
-                        println!("keys were the same");
                         result = Some(Leaf {
                             nibbles: prefix,
                             data: value,
                         });
                     } else if old_extra.len() == 0 {
-                        println!("old key exhausted; new branch");
                         let mut children = no_children![];
                         let (hd, tl) = nibble_head_tail(new_extra);
                         match children[hd as usize] {
@@ -171,7 +156,6 @@ pub mod trie {
                         });
                     } else {
                         // TODO this is ugly ugly ugly
-                        println!("making a branch; key done");
                         let mut children = no_children![];
                         let (hd, tl) = nibble_head_tail(old_extra);
                         match children[hd as usize] {
@@ -221,9 +205,7 @@ pub mod trie {
 
                 &mut Extension { ref mut nibbles, ref mut subtree } => {
                     let (prefix, old_extra, new_extra) = find_prefix(nibbles, &path);
-                    println!("updating extension");
                     if old_extra.len() == 0 {
-                        println!("new key longer than old extension");
                         // insert old subtree and new data as a branch
                         let mut subtree = subtree.clone(); // TODO: don't clone
                         subtree.update(new_extra, value);
@@ -251,7 +233,6 @@ pub mod trie {
                 },
 
                 &mut Branch { ref mut children, ref mut data } => {
-                    println!("branch");
                     let mut children = children.clone();
                     // TODO: case path is empty
                     let (hd, tl) = nibble_head_tail(path);
@@ -284,12 +265,6 @@ pub mod trie {
         fn rlp(&self) -> RlpEncoded {
             match *self {
                 &Leaf { ref nibbles, ref data } => {
-                    println!(
-                        "{:?} -> {:?}",
-                        HEXLOWER.encode(nibbles.as_bytes()),
-                        HEXLOWER.encode(data.as_bytes()),
-                    );
-
                     vec![
                         hex_prefix_encode_nibbles(nibbles, true),
                         data.clone().into_bytes().rlp(),
@@ -300,7 +275,6 @@ pub mod trie {
                     let mut hasher = Keccak256::default();
                     hasher.input(subtree.deref().rlp().to_vec().as_slice());
                     let subtree_hash: &[u8] = &hasher.result();
-                    println!("- extension subtree: {:?}\n- hash: {:?}", subtree, HEXLOWER.encode(subtree_hash));
 
                     vec![
                         hex_prefix_encode_nibbles(nibbles, false),
@@ -320,7 +294,6 @@ pub mod trie {
                         }
                     }
 
-                    // println!("branch encoding: {:?}", v);
                     match *data {
                         None => { v.push(RlpEncoded(vec![0x80])); },
                         Some(ref data) => {
@@ -397,16 +370,10 @@ pub mod trie {
                     .concat();
                 let len = bytes.len();
 
-                // println!("num children: {}", self.len());
-                // println!("children[0]: {:?}", HEXLOWER.encode(&self[0].rlp().to_vec()));
-                // println!("concat output: {:?}", HEXLOWER.encode(&bytes));
-                // println!("concat encoded length: {}", bytes.len());
-
                 let mut prefix: Vec<u8>;
                 if len < 56 {
                     let len8 = len as u8;
                     prefix = vec![192 + len8];
-                    // println!("small length list ({}). using prefix {:?}", len, HEXLOWER.encode(&prefix));
                 } else {
                     let mut be_buf: [u8; 32] = [0; 32]; // TODO: big enough? bigint forces length 32?
 
@@ -486,7 +453,6 @@ pub mod trie {
             } else {
                 self.node.update(path, value);
             }
-            println!("new node: {:?}", self.node);
         }
 
         pub fn lookup(&self, path: NibbleVec) -> Option<Vec<u8>> {
@@ -495,7 +461,6 @@ pub mod trie {
 
         pub fn hash(&self) -> U256 {
             let mut hasher = Keccak256::default();
-            println!("hash input: {:?}", HEXLOWER.encode(self.rlp_node().to_vec().as_slice()));
             hasher.input(self.rlp_node().to_vec().as_slice());
             let out: &[u8] = &hasher.result();
             U256::from(out)
