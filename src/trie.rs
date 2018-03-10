@@ -525,12 +525,22 @@ mod tests {
         // t.insert(NibbleVec::new(), vec![1,2,3]);
     }
 
+    fn hex_to_nibbles(str: &[u8]) -> NibbleVec {
+        NibbleVec::from_byte_vec(HEXLOWER.decode(str).unwrap())
+    }
+
+    fn vec_str_to_nibbles(v: Vec<&str>) -> NibbleVec {
+        let v: Vec<Vec<u8>> = v.iter().map(|x| Vec::from(x.as_bytes())).collect::<Vec<_>>();
+        let v: Vec<u8> = v.rlp().to_vec();
+        NibbleVec::from_byte_vec(v)
+    }
+
     #[test]
     fn matches_blog() {
         let t = &mut Trie::new();
         // six nibble key
-        let k = NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02']);
-        let v = NibbleVec::from_byte_vec(vec![Vec::from("hello".as_bytes())].rlp().to_vec());
+        let k = hex_to_nibbles(b"010102");
+        let v = vec_str_to_nibbles(vec!["hello"]);
 
         println!("exercise 1\n");
 
@@ -550,65 +560,65 @@ mod tests {
         println!("exercise 2\n");
 
         // make an entry with the same key
-        let k = NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02']);
-        let v = NibbleVec::from_byte_vec(vec![Vec::from("hellothere".as_bytes())].rlp().to_vec());
+        let k = hex_to_nibbles(b"010102");
+        let v = vec_str_to_nibbles(vec!["hellothere"]);
         t.insert(k, v);
         assert_eq!(t.hex_root(), "05e13d8be09601998499c89846ec5f3101a1ca09373a5f0b74021261af85d396");
 
         println!("exercise 2b\n");
 
         // make an entry with almost the same key but a different final nibble
-        let k = NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x03']);
-        let v = NibbleVec::from_byte_vec(vec![Vec::from("hellothere".as_bytes())].rlp().to_vec());
+        let k = hex_to_nibbles(b"010103");
+        let v = vec_str_to_nibbles(vec!["hellothere"]);
         t2b.insert(k, v);
         assert_eq!(t2b.hex_root(), "b5e187f15f1a250e51a78561e29ccfc0a7f48e06d19ce02f98dd61159e81f71d");
 
         println!("exercise 2c\n");
 
-        let k = NibbleVec::from_byte_vec(vec![b'\x01', b'\x01']);
-        let v = NibbleVec::from_byte_vec(vec![Vec::from("hellothere".as_bytes())].rlp().to_vec());
+        let k = hex_to_nibbles(b"0101");
+        let v = vec_str_to_nibbles(vec!["hellothere"]);
         t2c.insert(k, v);
         assert_eq!(t2c.hex_root(), "f3e46945b73ef862d59850a8e1a73ef736625dd9a02bed1c9f2cc3ff4cd798b3");
 
         println!("exercise 2d\n");
 
-        let k = NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02', b'\x57']);
-        let v = NibbleVec::from_byte_vec(vec![Vec::from("hellothere".as_bytes())].rlp().to_vec());
+        let k = hex_to_nibbles(b"01010257");
+        let v = vec_str_to_nibbles(vec!["hellothere"]);
         t2d.insert(k, v);
         assert_eq!(t2d.hex_root(), "dfd000b4b04811e7e59f1648f887bd56c16e4c047d6267793cf0eacf4b035c34");
 
         println!("exercise 3\n");
 
-        let k = NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02', b'\x55']);
-        let v = NibbleVec::from_byte_vec(vec![Vec::from("hellothere".as_bytes())].rlp().to_vec());
+        let k = hex_to_nibbles(b"01010255");
+        let v = vec_str_to_nibbles(vec!["hellothere"]);
         t3.insert(k, v);
         assert_eq!(t3.hex_root(), "17fe8af9c6e73de00ed5fd45d07e88b0c852da5dd4ee43870a26c39fc0ec6fb3");
-        let k = NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02', b'\x57']);
-        let v = NibbleVec::from_byte_vec(vec![Vec::from("jimbojones".as_bytes())].rlp().to_vec());
+        let k = hex_to_nibbles(b"01010257");
+        let v = vec_str_to_nibbles(vec!["jimbojones"]);
         t3.insert(k, v);
 //         assert_eq!(t3.hex_root(), "fcb2e3098029e816b04d99d7e1bba22d7b77336f9fe8604f2adfb04bcf04a727");
 
         println!("exercise 4\n");
 
         assert_eq!(
-            t2b.lookup(NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02'])),
+            t2b.lookup(hex_to_nibbles(b"010102")),
             Some(vec![Vec::from("hello".as_bytes())].rlp().to_vec())
         );
         assert_eq!(
-            t2b.lookup(NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x03'])),
+            t2b.lookup(hex_to_nibbles(b"010103")),
             Some(vec![Vec::from("hellothere".as_bytes())].rlp().to_vec())
         );
 
         assert_eq!(
-            t3.lookup(NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02'])),
+            t3.lookup(hex_to_nibbles(b"010102")),
             Some(vec![Vec::from("hello".as_bytes())].rlp().to_vec())
         );
         assert_eq!(
-            t3.lookup(NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02', b'\x55'])),
+            t3.lookup(hex_to_nibbles(b"01010255")),
             Some(vec![Vec::from("hellothere".as_bytes())].rlp().to_vec())
         );
         assert_eq!(
-            t3.lookup(NibbleVec::from_byte_vec(vec![b'\x01', b'\x01', b'\x02', b'\x57'])),
+            t3.lookup(hex_to_nibbles(b"01010257")),
             Some(vec![Vec::from("jimbojones".as_bytes())].rlp().to_vec())
         );
     }
