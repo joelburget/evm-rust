@@ -1,3 +1,7 @@
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
+extern crate serde_json;
 extern crate bigint;
 extern crate core;
 extern crate digest;
@@ -7,6 +11,7 @@ extern crate sha3;
 extern crate data_encoding;
 
 pub mod trie;
+pub mod json;
 
 use core::clone::Clone;
 use core::ops::{Add,BitAnd,BitOr,BitXor,Index,IndexMut,Mul,Not,Sub};
