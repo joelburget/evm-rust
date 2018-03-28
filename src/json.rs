@@ -140,10 +140,10 @@ pub mod json {
             //XXX - This can be sorted out once the BigUint vs U256 thing is figured out
             block: Block {
                 beneficiary: Address([0;20]),
-                difficulty: BigUint::new(Vec::new()),
-                number: BigUint::new(Vec::new()),
-                gas_limit: BigUint::new(Vec::new()),
-                timestamp: BigUint::new(Vec::new()),
+                difficulty: U256::one(),
+                number: U256::one(),
+                gas_limit: U256::one(),
+                timestamp: U256::one(),
             }
         }           
     }
@@ -174,10 +174,10 @@ pub mod json {
             //XXX - This can be sorted out once the BigUint vs U256 thing is figured out
             block: Block {
                 beneficiary: Address([0;20]),
-                difficulty: BigUint::new(Vec::new()),
-                number: BigUint::new(Vec::new()), 
-                gas_limit: BigUint::new(Vec::new()),
-                timestamp: BigUint::new(Vec::new()),
+                difficulty: U256::one(),
+                number: U256::one(), 
+                gas_limit: U256::one(),
+                timestamp: U256::one(),
             }
         }  
     }

@@ -189,13 +189,13 @@ pub struct AccountState {
 #[derive(PartialEq, Clone)]
 pub struct TransactionCommon {
     nonce: u64,
-    gas_price: BigUint,
-    gas_limit: BigUint,
+    gas_price: U256,
+    gas_limit: U256,
     to: Address,
-    value: BigUint,
-    v: BigUint,
-    r: BigUint,
-    s: BigUint,
+    value: U256,
+    v: U256,
+    r: U256,
+    s: U256,
 }
 
 #[derive(PartialEq, Clone)]
@@ -227,11 +227,11 @@ pub struct Block {
     // transactions_root: K256,
     // receipts_root: K256,
     // logs_bloom: Bloom,
-    difficulty: BigUint,
-    number: BigUint,
-    gas_limit: BigUint,
-    // gas_used: BigUint,
-    timestamp: BigUint,
+    difficulty: U256,
+    number: U256,
+    gas_limit: U256,
+    // gas_used: U256,
+    timestamp: U256,
     // extra_data: Vec<u8>,
     // mix_hash: K256,
     // nonce: u64,
@@ -253,7 +253,7 @@ pub struct Log {
 #[derive(PartialEq, Clone)]
 pub struct TransactionReceipt {
     // state:
-    gas_used: u32,
+    gas_used: U256,
     logs: Vec<Log>,
     bloom: Bloom,
 }
@@ -691,16 +691,16 @@ impl VM {
                 state.stack.push(addr_to_u256(&self.block.beneficiary)),
 
             TIMESTAMP =>
-                state.stack.push(big_to_u256(&self.block.timestamp)),
+                state.stack.push(self.block.timestamp),
 
             NUMBER =>
-                state.stack.push(big_to_u256(&self.block.number)),
+                state.stack.push(self.block.number),
 
             DIFFICULTY =>
-                state.stack.push(big_to_u256(&self.block.difficulty)),
+                state.stack.push(self.block.difficulty),
 
             GASLIMIT =>
-                state.stack.push(big_to_u256(&self.block.gas_limit)),
+                state.stack.push(self.block.gas_limit),
 
             POP => state.stack.pop(1),
 
@@ -794,10 +794,10 @@ fn init_vm(code: &Vec<u8>, gas: u32) -> VM {
         },
         block: Block {
             beneficiary: Address([0; 20]),
-            difficulty: BigUint::new(Vec::new()),
-            number: BigUint::new(Vec::new()),
-            gas_limit: BigUint::new(Vec::new()),
-            timestamp: BigUint::new(Vec::new()),
+            difficulty: U256::one(),
+            number: U256::one(),
+            gas_limit: U256::one(),
+            timestamp: U256::one(),
         }
     }
 }
