@@ -96,6 +96,18 @@ pub mod trie {
         }
     }
 
+    fn two_branch(prefix: NibbleVec,
+                  k1: NibbleVec, v1: NibbleVec,
+                  k2: NibbleVec, v2: NibbleVec) -> TrieNode {
+        let mut branch = Branch {
+            children: no_children![],
+            data: None,
+        };
+        branch.update(k1, v1);
+        branch.update(k2, v2);
+        maybe_extend(prefix, branch)
+    }
+
     impl TrieNode {
         pub fn lookup(&self, path: NibbleVec) -> Option<Vec<u8>> {
             match self {
@@ -147,13 +159,11 @@ pub mod trie {
 
                     } else {
                         // otherwise we create an extension with prefix pointing to a branch
-                        let mut branch = Branch {
-                            children: no_children![],
-                            data: None,
-                        };
-                        branch.update(old_extra, data.clone());
-                        branch.update(new_extra, value);
-                        result = Some(maybe_extend(prefix, branch))
+                        result = Some(two_branch(
+                            prefix,
+                            old_extra, data.clone(),
+                            new_extra, value
+                            ));
                     }
                 },
 
@@ -166,14 +176,11 @@ pub mod trie {
                         result = Some(maybe_extend(prefix, *subtree));
                     } else {
                         // the new key we're inserting bottoms out here
-                        // TODO: this look suspiciously similar to above
-                        let mut branch = Branch {
-                            children: no_children![],
-                            data: None,
-                        };
-                        branch.update(old_extra, nibbles.clone());
-                        branch.update(new_extra, value);
-                        result = Some(maybe_extend(prefix, branch));
+                        result = Some(two_branch(
+                            prefix,
+                            old_extra, nibbles.clone(),
+                            new_extra, value
+                        ));
                     }
                 },
 

@@ -17,7 +17,7 @@ pub mod json {
     use std::io::Read;
     use std::convert::From;
     use std::convert::AsMut;
-    
+
 
     pub fn load_test(filename: &str) -> (VM,VM) {
         let mut f = File::open(filename).expect("Could not find file");
@@ -30,7 +30,7 @@ pub mod json {
 
     /// These structs represent the test format described in
     /// http://ethereum-tests.readthedocs.io/en/latest/test_types/vm_tests.html
-    
+
     #[derive(Deserialize)]
     struct Test {
         _info: serde_json::Value,
@@ -40,32 +40,32 @@ pub mod json {
         gas: String, //GAS REMAINING AT END OF EXECUTION
         logs: String,
         out: String,
-        post: serde_json::Value, 
+        post: serde_json::Value,
         callcreates: serde_json::Value,
     }
 
     #[derive(Deserialize)]
     struct TestEnv {
-        currentCoinbase: String, 
-        currentDifficulty: String, 
+        currentCoinbase: String,
+        currentDifficulty: String,
         currentGasLimit: String,
         currentNumber: String,
         currentTimestamp: String,
         //XXX previousHash: String,
     }
-    
+
     #[derive(Deserialize)]
     struct TestExec {
         address: String,
         origin: String,
         caller: String,
-        value: String, 
+        value: String,
         data: String,
         code: String,
-        gasPrice: String, 
+        gasPrice: String,
         gas: String,
     }
-    
+
     #[derive(Deserialize)]
     struct TestAccount {
         balance: String,
@@ -73,12 +73,12 @@ pub mod json {
         code: String,
         storage: String,
     }
-    
+
     #[derive(Deserialize)]
     struct Test1 {
         add0: Test,
     }
-    
+
     fn hexstr_to_vec(v: &str) -> Vec<u8> {
         let v_bytes = &v.as_bytes()[2..];
         v_bytes.to_vec()
@@ -108,7 +108,7 @@ pub mod json {
         <A as AsMut<[T]>>::as_mut(&mut a).clone_from_slice(slice);
         a
     }
-    
+
     //NEED TO WIRE THESE VALS INTO THE VM:
     //unused from Test: pre, post, gas (at end), logs, out, callcreates
     //unused from TestEnv: currentCoinbase
@@ -145,7 +145,7 @@ pub mod json {
                 gas_limit: U256::one(),
                 timestamp: U256::one(),
             }
-        }           
+        }
     }
 
     //What the final VM state of a test should be
@@ -156,7 +156,7 @@ pub mod json {
                 code: hexstr_to_vec(&test.exec.code),
                 gas_available: hexstr_to_u256(&test.gas),
                 pc: 0, //XXX this is not tracked in the json tests so we should just default to the end PC
-                memory: Vec::new(), //XXX 
+                memory: Vec::new(), //XXX
                 active_words: U256::zero(), //XXX
                 stack: Stack::new(), //XXX again, not tracked in the json
             },
@@ -179,6 +179,6 @@ pub mod json {
                 gas_limit: U256::one(),
                 timestamp: U256::one(),
             }
-        }  
+        }
     }
 }
