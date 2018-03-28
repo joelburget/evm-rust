@@ -49,7 +49,7 @@ impl S256 {
     fn to_u256(&self) -> U256 {
         self.0
     }
-    
+
     fn abs(&self) -> U256 {
         let num = self.0;
         if num.bit(255) {
@@ -63,7 +63,7 @@ impl S256 {
         let num = self.0;
         S256(!num + U256::one())
     }
-    
+
     fn sign(&self) -> bool {
         self.0.bit(255)
     }
@@ -518,12 +518,12 @@ impl VM {
                  } else {
                      let min_value = (U256::one() << 255) - U256::one();
                      let negative_one = !U256::zero();
-                     
+
                      if s0 == min_value && s1 == negative_one {
                          min_value
                      } else {
                          let divisor = S256(S256(s0).abs() / S256(s1).abs());
-                         
+
                          if S256(s0).sign() != S256(s1).sign() {
                              divisor.invert().to_u256()
                          } else {
@@ -540,7 +540,7 @@ impl VM {
                            s0 % s1
                        }
             ),
-            
+
             SMOD       => state.stack.apply_binary_op(|s0,s1|
                        if s1.is_zero() {
                            U256::zero()
@@ -551,14 +551,14 @@ impl VM {
                            }
                            res
                        }
-            ),      
+            ),
 
             // Intermediate calculations not subject to 2^256 modulo
             ADDMOD     => state.stack.apply_ternary_op(|s0, s1, s2|
                        if s2.is_zero() {
                            U256::zero()
                        } else {
-                           
+
                            (s0 + s1) % s2
                        }
             ),
@@ -587,8 +587,8 @@ impl VM {
                        } else {
                            s0
                        }
-            ),    
-                                                          
+            ),
+
 
             LT => state.stack.apply_binary_op(|x, y| bool_to_u256(x < y)),
 
